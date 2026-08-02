@@ -13,18 +13,6 @@ import (
 	"github.com/mrz1836/go-instantly/lead"
 )
 
-// fuzzClient answers every request with the given status and body, so no fuzz
-// input ever reaches a network.
-func fuzzClient(statusCode int, body string) *instantly.Client {
-	return instantly.NewClient(instantlytest.APIKey, instantly.WithHTTPClient(
-		&http.Client{Transport: instantlytest.RoundTripFunc(
-			func(_ *http.Request) (*http.Response, error) {
-				return instantlytest.JSONResponse(statusCode, body), nil
-			},
-		)},
-	))
-}
-
 // FuzzLeadSerialization round trips arbitrary field values through the create,
 // update, and list bodies, asserting the encoding never panics and never drifts.
 func FuzzLeadSerialization(f *testing.F) {
@@ -73,7 +61,7 @@ func FuzzLeadResponseDecoding(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, body string) {
 		ctx := context.Background()
-		svc := lead.New(fuzzClient(http.StatusOK, body))
+		svc := lead.New(instantlytest.FuzzClient(http.StatusOK, body))
 
 		got, err := svc.Get(ctx, testID)
 		if err != nil {

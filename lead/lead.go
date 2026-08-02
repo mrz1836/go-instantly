@@ -1,21 +1,9 @@
-// Package lead provides typed access to the Instantly.ai V2 Lead API.
-//
-// It wraps the /api/v2/leads endpoints: creating, reading, patching, and
-// deleting leads; listing them (via POST /leads/list, whose filters and cursor
-// travel in the request body); bulk add, delete, assign, move, and merge; and
-// updating interest status and subsequence membership.
-//
-//	svc := lead.New(instantly.NewClient("[API-KEY]"))
-//	page, err := svc.List(ctx, lead.ListRequest{Campaign: "campaign-id", Limit: 50})
-//
-// Importing this package pulls in only github.com/mrz1836/go-instantly and the
-// standard library.
 package lead
 
 import (
 	"context"
 	"encoding/json"
-	"net/url"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 )
@@ -89,6 +77,13 @@ const (
 	// InterestNoShow means the lead was a no-show.
 	InterestNoShow InterestStatus = -4
 )
+
+// Filter is a documented lead filter, applied to a list, assign, or move
+// request to narrow which leads it targets.
+//
+// It is a named string so a filter cannot be confused with a free-text field;
+// pass one of the filter values documented for the /api/v2/leads endpoints.
+type Filter string
 
 // Lead is a single lead returned by the Instantly.ai V2 API.
 //
@@ -247,6 +242,14 @@ type Lead struct {
 	StatusSummarySubseq json.RawMessage `json:"status_summary_subseq,omitempty"`
 }
 
+// ParsedTimestampCreated parses TimestampCreated as an RFC 3339 time.
+//
+// The raw string field is left untouched so a decoded lead re-encodes
+// byte-for-byte; call this accessor when a time.Time is needed.
+func (l *Lead) ParsedTimestampCreated() (time.Time, error) {
+	return time.Parse(time.RFC3339, l.TimestampCreated)
+}
+
 // ListRequest is the body of a list-leads request.
 //
 // Listing leads is a POST whose filters and pagination cursor travel in the
@@ -262,7 +265,7 @@ type ListRequest struct {
 	Search string `json:"search,omitempty"`
 
 	// Filter restricts results to a documented filter.
-	Filter string `json:"filter,omitempty"`
+	Filter Filter `json:"filter,omitempty"`
 
 	// IDs restricts results to specific lead identifiers.
 	IDs []string `json:"ids,omitempty"`
@@ -308,14 +311,10 @@ type ListRequest struct {
 }
 
 // ListResponse is a single page of leads.
-type ListResponse struct {
-	// Items are the leads on this page.
-	Items []Lead `json:"items"`
-
-	// NextStartingAfter is the cursor for the following page, and is empty on
-	// the last page.
-	NextStartingAfter string `json:"next_starting_after,omitempty"`
-}
+//
+// It aliases instantly.Page[Lead], the cursor-paginated envelope every resource
+// shares, so the generic pagination helper accepts List directly.
+type ListResponse = instantly.Page[Lead]
 
 // CreateRequest is the body of a create-lead request. No field is required.
 type CreateRequest struct {
@@ -419,12 +418,7 @@ type UpdateRequest struct {
 
 // Create adds a new lead and returns it.
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*Lead, error) {
-	out := &Lead{}
-	if err := s.client.Post(ctx, basePath, req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Lead](ctx, s.client, basePath, req)
 }
 
 // List returns a single page of leads matching the request.
@@ -433,40 +427,20 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Lead, error) 
 // body. Pass the returned NextStartingAfter back as req.StartingAfter to fetch
 // the following page, or use ListIter to walk them.
 func (s *Service) List(ctx context.Context, req ListRequest) (*ListResponse, error) {
-	out := &ListResponse{}
-	if err := s.client.Post(ctx, basePath+"/list", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[ListResponse](ctx, s.client, basePath+"/list", req)
 }
 
 // Get returns a single lead by its unique identifier.
 func (s *Service) Get(ctx context.Context, id string) (*Lead, error) {
-	out := &Lead{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[Lead](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // Update patches a lead and returns its updated state.
 func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*Lead, error) {
-	out := &Lead{}
-	if err := s.client.Patch(ctx, basePath+"/"+url.PathEscape(id), req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PatchResult[Lead](ctx, s.client, instantly.JoinPath(basePath, id), req)
 }
 
 // Delete deletes a lead and returns the lead that was deleted.
 func (s *Service) Delete(ctx context.Context, id string) (*Lead, error) {
-	out := &Lead{}
-	if err := s.client.Delete(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.DeleteResult[Lead](ctx, s.client, instantly.JoinPath(basePath, id))
 }

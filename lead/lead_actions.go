@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+
+	"github.com/mrz1836/go-instantly"
 )
 
 // BulkDeleteRequest is the body of a bulk-delete request.
@@ -108,7 +110,7 @@ type BulkAssignRequest struct {
 	ListID string `json:"list_id,omitempty"`
 
 	// Filter restricts the assignment to a documented filter.
-	Filter string `json:"filter,omitempty"`
+	Filter Filter `json:"filter,omitempty"`
 
 	// Search restricts the assignment to leads matching a search term.
 	Search string `json:"search,omitempty"`
@@ -205,7 +207,7 @@ type MoveRequest struct {
 	AssignedTo string `json:"assigned_to,omitempty"`
 
 	// Filter restricts the move to a documented filter.
-	Filter string `json:"filter,omitempty"`
+	Filter Filter `json:"filter,omitempty"`
 
 	// Search restricts the move to leads matching a search term.
 	Search string `json:"search,omitempty"`
@@ -291,9 +293,7 @@ type BackgroundJob struct {
 // The API models this as a DELETE that carries a request body, so it goes
 // through the low-level client directly.
 func (s *Service) BulkDelete(ctx context.Context, req BulkDeleteRequest) (int64, error) {
-	out := &struct {
-		Count int64 `json:"count"`
-	}{}
+	out := &instantly.CountResponse{}
 	if err := s.client.Do(ctx, http.MethodDelete, basePath, req, out); err != nil {
 		return 0, err
 	}
@@ -303,12 +303,7 @@ func (s *Service) BulkDelete(ctx context.Context, req BulkDeleteRequest) (int64,
 
 // BulkAdd adds several leads at once and returns the import summary.
 func (s *Service) BulkAdd(ctx context.Context, req BulkAddRequest) (*AddResponse, error) {
-	out := &AddResponse{}
-	if err := s.client.Post(ctx, basePath+"/add", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[AddResponse](ctx, s.client, basePath+"/add", req)
 }
 
 // BulkAssign assigns several leads to organization users. The endpoint returns
@@ -319,12 +314,7 @@ func (s *Service) BulkAssign(ctx context.Context, req BulkAssignRequest) error {
 
 // Merge merges one lead into another and returns the merged lead.
 func (s *Service) Merge(ctx context.Context, req MergeRequest) (*Lead, error) {
-	out := &Lead{}
-	if err := s.client.Post(ctx, basePath+"/merge", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Lead](ctx, s.client, basePath+"/merge", req)
 }
 
 // UpdateInterestStatus updates the interest status of a lead. The endpoint
@@ -335,31 +325,16 @@ func (s *Service) UpdateInterestStatus(ctx context.Context, req UpdateInterestSt
 
 // RemoveFromSubsequence removes a lead from its subsequence and returns the lead.
 func (s *Service) RemoveFromSubsequence(ctx context.Context, req SubsequenceRemoveRequest) (*Lead, error) {
-	out := &Lead{}
-	if err := s.client.Post(ctx, basePath+"/subsequence/remove", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Lead](ctx, s.client, basePath+"/subsequence/remove", req)
 }
 
 // MoveToSubsequence moves a lead to a subsequence and returns the lead.
 func (s *Service) MoveToSubsequence(ctx context.Context, req SubsequenceMoveRequest) (*Lead, error) {
-	out := &Lead{}
-	if err := s.client.Post(ctx, basePath+"/subsequence/move", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Lead](ctx, s.client, basePath+"/subsequence/move", req)
 }
 
 // Move moves leads to a campaign or list and returns the background job that
 // carries out the move.
 func (s *Service) Move(ctx context.Context, req MoveRequest) (*BackgroundJob, error) {
-	out := &BackgroundJob{}
-	if err := s.client.Post(ctx, basePath+"/move", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[BackgroundJob](ctx, s.client, basePath+"/move", req)
 }

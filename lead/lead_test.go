@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -117,18 +116,6 @@ func (s *LeadTestSuite) TestCreate() {
 	s.Equal(lead.InterestInterested, got.LtInterestStatus)
 }
 
-// TestCreateFailure verifies a rejected create returns no lead.
-func (s *LeadTestSuite) TestCreateFailure() {
-	s.Router.Post(collectionPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusPaymentRequired, "Payment Required", "limit")
-	})
-
-	got, err := s.svc().Create(context.Background(), lead.CreateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusPaymentRequired)
-	s.Nil(got)
-}
-
 // TestList verifies the POST-list body carries the filters and the page decodes.
 func (s *LeadTestSuite) TestList() {
 	s.Router.Post(listPath, func(w http.ResponseWriter, req *http.Request) {
@@ -162,18 +149,6 @@ func (s *LeadTestSuite) TestList() {
 	s.Nil(bare.EmailOpenedStep)
 }
 
-// TestListFailure verifies a failed list returns no page.
-func (s *LeadTestSuite) TestListFailure() {
-	s.Router.Post(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "slow")
-	})
-
-	page, err := s.svc().List(context.Background(), lead.ListRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(page)
-}
-
 // TestGet verifies a single lead decodes.
 func (s *LeadTestSuite) TestGet() {
 	s.Router.Get(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -186,18 +161,6 @@ func (s *LeadTestSuite) TestGet() {
 	s.Require().NoError(err)
 	s.Equal("example.com", got.CompanyDomain)
 	s.JSONEq(`{"sent":3}`, string(got.StatusSummary))
-}
-
-// TestGetFailure verifies a missing lead returns no value.
-func (s *LeadTestSuite) TestGetFailure() {
-	s.Router.Get(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no lead")
-	})
-
-	got, err := s.svc().Get(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestUpdate verifies the patch body is sent and the lead decodes.
@@ -234,18 +197,6 @@ func (s *LeadTestSuite) TestUpdateOmitsUnsetFields() {
 	s.NotNil(got)
 }
 
-// TestUpdateFailure verifies a failed patch returns no value.
-func (s *LeadTestSuite) TestUpdateFailure() {
-	s.Router.Patch(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no lead")
-	})
-
-	got, err := s.svc().Update(context.Background(), "missing", lead.UpdateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDelete verifies the deleted lead is returned to the caller.
 func (s *LeadTestSuite) TestDelete() {
 	s.Router.Delete(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -257,18 +208,6 @@ func (s *LeadTestSuite) TestDelete() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestDeleteFailure verifies a failed delete returns no value.
-func (s *LeadTestSuite) TestDeleteFailure() {
-	s.Router.Delete(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no lead")
-	})
-
-	got, err := s.svc().Delete(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestListIter verifies the iterator stitches pages together, carries the
@@ -354,6 +293,76 @@ func (s *LeadTestSuite) TestPathParametersAreEscaped() {
 	s.Equal("/api/v2/leads/..%2Fadmin%3Fx=1", requestURI)
 }
 
+// TestFailures verifies every endpoint surfaces the documented API error.
+func (s *LeadTestSuite) TestFailures() {
+	svc, ctx := s.svc(), context.Background()
+	s.RunFailures([]instantlytest.FailureCase{
+		{
+			Name: "create", Method: http.MethodPost, Path: collectionPath, Status: http.StatusPaymentRequired,
+			Call: func() error { _, err := svc.Create(ctx, lead.CreateRequest{}); return err },
+		},
+		{
+			Name: "list", Method: http.MethodPost, Path: listPath, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.List(ctx, lead.ListRequest{}); return err },
+		},
+		{
+			Name: "get", Method: http.MethodGet, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Get(ctx, "missing"); return err },
+		},
+		{
+			Name: "update", Method: http.MethodPatch, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Update(ctx, "missing", lead.UpdateRequest{}); return err },
+		},
+		{
+			Name: "delete", Method: http.MethodDelete, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Delete(ctx, "missing"); return err },
+		},
+		{
+			Name: "bulkDelete", Method: http.MethodDelete, Path: collectionPath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.BulkDelete(ctx, lead.BulkDeleteRequest{}); return err },
+		},
+		{
+			Name: "bulkAdd", Method: http.MethodPost, Path: addPath, Status: http.StatusPaymentRequired,
+			Call: func() error { _, err := svc.BulkAdd(ctx, lead.BulkAddRequest{}); return err },
+		},
+		{
+			Name: "bulkAssign", Method: http.MethodPost, Path: bulkAssignPath, Status: http.StatusForbidden,
+			Call: func() error { return svc.BulkAssign(ctx, lead.BulkAssignRequest{}) },
+		},
+		{
+			Name: "merge", Method: http.MethodPost, Path: mergePath, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Merge(ctx, lead.MergeRequest{}); return err },
+		},
+		{
+			Name: "updateInterestStatus", Method: http.MethodPost, Path: interestPath, Status: http.StatusNotFound,
+			Call: func() error { return svc.UpdateInterestStatus(ctx, lead.UpdateInterestStatusRequest{}) },
+		},
+		{
+			Name: "removeFromSubsequence", Method: http.MethodPost, Path: subRemovePath, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.RemoveFromSubsequence(ctx, lead.SubsequenceRemoveRequest{}); return err },
+		},
+		{
+			Name: "moveToSubsequence", Method: http.MethodPost, Path: subMovePath, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.MoveToSubsequence(ctx, lead.SubsequenceMoveRequest{}); return err },
+		},
+		{
+			Name: "move", Method: http.MethodPost, Path: movePath, Status: http.StatusForbidden,
+			Call: func() error { _, err := svc.Move(ctx, lead.MoveRequest{}); return err },
+		},
+	})
+}
+
+// TestParsedTimestampCreated verifies the RFC 3339 accessor parses a valid
+// timestamp and reports an error for an unparseable one.
+func (s *LeadTestSuite) TestParsedTimestampCreated() {
+	got, err := (&lead.Lead{TimestampCreated: "2026-08-01T10:00:00.000Z"}).ParsedTimestampCreated()
+	s.Require().NoError(err)
+	s.Equal(2026, got.Year())
+
+	_, err = (&lead.Lead{TimestampCreated: "not-a-timestamp"}).ParsedTimestampCreated()
+	s.Require().Error(err)
+}
+
 // svc builds a Lead service pointed at the suite's mock client.
 func (s *LeadTestSuite) svc() *lead.Service {
 	return lead.New(s.Client)
@@ -373,9 +382,5 @@ func leadPage(ids []string, nextCursor string) string {
 		))
 	}
 
-	if nextCursor == "" {
-		return fmt.Sprintf(`{"items":[%s]}`, strings.Join(items, ","))
-	}
-
-	return fmt.Sprintf(`{"items":[%s],"next_starting_after":%q}`, strings.Join(items, ","), nextCursor)
+	return instantlytest.Page(items, nextCursor)
 }

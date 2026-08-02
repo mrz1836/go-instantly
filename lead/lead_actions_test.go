@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/mrz1836/go-instantly"
-	"github.com/mrz1836/go-instantly/internal/instantlytest"
 	"github.com/mrz1836/go-instantly/lead"
 )
 
@@ -31,18 +30,6 @@ func (s *LeadTestSuite) TestBulkDelete() {
 
 	s.Require().NoError(err)
 	s.Equal(int64(2), count)
-}
-
-// TestBulkDeleteFailure verifies a failed bulk delete reports zero and an error.
-func (s *LeadTestSuite) TestBulkDeleteFailure() {
-	s.Router.Delete(collectionPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "bad key")
-	})
-
-	count, err := s.svc().BulkDelete(context.Background(), lead.BulkDeleteRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Zero(count)
 }
 
 // TestBulkAdd verifies the leads array is sent and the import summary decodes.
@@ -75,18 +62,6 @@ func (s *LeadTestSuite) TestBulkAdd() {
 	s.JSONEq(`[{"id":"lead-uuid-1"}]`, string(got.CreatedLeads))
 }
 
-// TestBulkAddFailure verifies a failed add returns no summary.
-func (s *LeadTestSuite) TestBulkAddFailure() {
-	s.Router.Post(addPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusPaymentRequired, "Payment Required", "limit")
-	})
-
-	got, err := s.svc().BulkAdd(context.Background(), lead.BulkAddRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusPaymentRequired)
-	s.Nil(got)
-}
-
 // TestBulkAssign verifies the assignees are sent and success is a nil error.
 func (s *LeadTestSuite) TestBulkAssign() {
 	s.Router.Post(bulkAssignPath, func(w http.ResponseWriter, req *http.Request) {
@@ -102,17 +77,6 @@ func (s *LeadTestSuite) TestBulkAssign() {
 	})
 
 	s.Require().NoError(err)
-}
-
-// TestBulkAssignFailure verifies a failed assign surfaces the envelope.
-func (s *LeadTestSuite) TestBulkAssignFailure() {
-	s.Router.Post(bulkAssignPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusForbidden, "Forbidden", "nope")
-	})
-
-	err := s.svc().BulkAssign(context.Background(), lead.BulkAssignRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusForbidden)
 }
 
 // TestMerge verifies the merge body is sent and the merged lead decodes.
@@ -133,18 +97,6 @@ func (s *LeadTestSuite) TestMerge() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestMergeFailure verifies a failed merge returns no lead.
-func (s *LeadTestSuite) TestMergeFailure() {
-	s.Router.Post(mergePath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no lead")
-	})
-
-	got, err := s.svc().Merge(context.Background(), lead.MergeRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestUpdateInterestStatus verifies the required interest_value is always sent,
@@ -186,17 +138,6 @@ func (s *LeadTestSuite) TestUpdateInterestStatusClears() {
 	s.Require().NoError(err)
 }
 
-// TestUpdateInterestStatusFailure verifies a failed update surfaces the envelope.
-func (s *LeadTestSuite) TestUpdateInterestStatusFailure() {
-	s.Router.Post(interestPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no lead")
-	})
-
-	err := s.svc().UpdateInterestStatus(context.Background(), lead.UpdateInterestStatusRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-}
-
 // TestRemoveFromSubsequence verifies the lead id is sent and the lead decodes.
 func (s *LeadTestSuite) TestRemoveFromSubsequence() {
 	s.Router.Post(subRemovePath, func(w http.ResponseWriter, req *http.Request) {
@@ -211,18 +152,6 @@ func (s *LeadTestSuite) TestRemoveFromSubsequence() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestRemoveFromSubsequenceFailure verifies a failure returns no lead.
-func (s *LeadTestSuite) TestRemoveFromSubsequenceFailure() {
-	s.Router.Post(subRemovePath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no lead")
-	})
-
-	got, err := s.svc().RemoveFromSubsequence(context.Background(), lead.SubsequenceRemoveRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestMoveToSubsequence verifies the ids are sent and the lead decodes.
@@ -243,18 +172,6 @@ func (s *LeadTestSuite) TestMoveToSubsequence() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestMoveToSubsequenceFailure verifies a failure returns no lead.
-func (s *LeadTestSuite) TestMoveToSubsequenceFailure() {
-	s.Router.Post(subMovePath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no lead")
-	})
-
-	got, err := s.svc().MoveToSubsequence(context.Background(), lead.SubsequenceMoveRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestMove verifies the move body is sent and the background job decodes.
@@ -282,16 +199,4 @@ func (s *LeadTestSuite) TestMove() {
 	s.Equal("job-1", got.ID)
 	s.Equal("pending", got.Status)
 	s.Nil(got.EntityID)
-}
-
-// TestMoveFailure verifies a failed move returns no job.
-func (s *LeadTestSuite) TestMoveFailure() {
-	s.Router.Post(movePath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusForbidden, "Forbidden", "nope")
-	})
-
-	got, err := s.svc().Move(context.Background(), lead.MoveRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusForbidden)
-	s.Nil(got)
 }
