@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/mrz1836/go-instantly/emailverification"
 	"github.com/mrz1836/go-instantly/inboxanalytics"
 	"github.com/mrz1836/go-instantly/inboxtest"
+	"github.com/mrz1836/go-instantly/supersearch"
 )
 
 func main() {
@@ -47,6 +49,7 @@ func main() {
 	verifications := emailverification.New(client)
 	inboxTests := inboxtest.New(client)
 	inboxAnalytics := inboxanalytics.New(client)
+	enrichment := supersearch.New(client)
 
 	ctx := context.Background()
 
@@ -83,6 +86,10 @@ func main() {
 	}
 
 	if err := inboxPlacement(ctx, inboxTests, inboxAnalytics); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := enrichLeads(ctx, enrichment); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -197,6 +204,50 @@ func inboxPlacement(
 	}
 
 	log.Printf("test %s has %d placement events so far", sanitize(created.ID), len(events.Items))
+
+	return nil
+}
+
+// enrichLeads counts, previews, and enriches leads from a SuperSearch query.
+//
+// The SuperSearch query DSL is deeply nested and free-form, so it is passed as a
+// json.RawMessage and preserved verbatim: build it however you like — a struct
+// you marshal, or a raw literal as shown here.
+func enrichLeads(ctx context.Context, enrichment *supersearch.Service) error {
+	filters := json.RawMessage(`{"department":["engineering"],"title":["cto","vp engineering"]}`)
+
+	// Count first to size the job, then preview a sample before committing to it.
+	count, err := enrichment.CountLeads(ctx, supersearch.SearchRequest{
+		SearchFilters:  filters,
+		SkipOwnedLeads: instantly.Ptr(true),
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("the query matches %.0f leads", count.NumberOfLeads)
+
+	preview, err := enrichment.PreviewLeads(ctx, supersearch.SearchRequest{SearchFilters: filters})
+	if err != nil {
+		return err
+	}
+
+	for _, lead := range preview.Leads {
+		log.Printf("preview: %s at %s", sanitize(lead.FullName), sanitize(lead.CompanyName))
+	}
+
+	// Enriching the leads pulls them into a list and returns the enrichment.
+	enriched, err := enrichment.EnrichLeads(ctx, supersearch.EnrichLeadsRequest{
+		SearchFilters:       filters,
+		Limit:               100,
+		ListName:            "SuperSearch — engineering leaders",
+		WorkEmailEnrichment: instantly.Ptr(true),
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("started enrichment %s", sanitize(enriched.ID))
 
 	return nil
 }

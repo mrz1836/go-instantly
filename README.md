@@ -200,10 +200,10 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**94 / 171 operations · 12 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+**105 / 171 operations · 13 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
 Campaign, Lead, Lead List, Lead Label, Campaign Subsequence, Email Verification, Inbox Placement Test,
-Inbox Placement Analytics, Inbox Placement Report); every remaining resource is listed below with a link to its
-reference docs and its operation count, so you can see exactly what is left.
+Inbox Placement Analytics, Inbox Placement Report, SuperSearch Enrichment); every remaining resource is
+listed below with a link to its reference docs and its operation count, so you can see exactly what is left.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
 	* [x] [`POST /api/v2/emails/test`](email/email.go) - Send a test email (`email.Service.SendTest`)
@@ -311,11 +311,22 @@ reference docs and its operation count, so you can see exactly what is left.
 * [x] **[Inbox Placement Report API](https://developer.instantly.ai/api-reference/inboxplacementblacklistandspamassassinreport) — ([`inboxreport/`](inboxreport/inboxreport.go))**
 	* [x] `GET /api/v2/inbox-placement-reports` - List reports (`inboxreport.Service.List` / `ListIter`)
 	* [x] `GET /api/v2/inbox-placement-reports/{id}` - Get report (`inboxreport.Service.Get`)
+* [x] **[SuperSearch Enrichment API](https://developer.instantly.ai/api-reference/supersearchenrichment) — ([`supersearch/`](supersearch/supersearch.go))**
+	* [x] `POST /api/v2/supersearch-enrichment/` - Create enrichment (`supersearch.Service.Create`)
+	* [x] `GET /api/v2/supersearch-enrichment/{resource_id}` - Get enrichment for resource (`supersearch.Service.Get`)
+	* [x] `PATCH /api/v2/supersearch-enrichment/{resource_id}/settings` - Update settings (`supersearch.Service.UpdateSettings`)
+	* [x] `POST /api/v2/supersearch-enrichment/run` - Run enrichment (`supersearch.Service.Run`)
+	* [x] `POST /api/v2/supersearch-enrichment/ai` - Create AI enrichment (`supersearch.Service.CreateAI`)
+	* [x] `GET /api/v2/supersearch-enrichment/ai/{resource_id}/in-progress` - In-progress AI jobs (`supersearch.Service.AIInProgress`)
+	* [x] `POST /api/v2/supersearch-enrichment/count-leads-from-supersearch` - Count leads (`supersearch.Service.CountLeads`)
+	* [x] `POST /api/v2/supersearch-enrichment/preview-leads-from-supersearch` - Preview leads (`supersearch.Service.PreviewLeads`)
+	* [x] `POST /api/v2/supersearch-enrichment/enrich-leads-from-supersearch` - Enrich leads (`supersearch.Service.EnrichLeads`)
+	* [x] `POST /api/v2/supersearch-enrichment/signal-keywords-facet` - Facet signal keywords (`supersearch.Service.SignalKeywords`)
+	* [x] `GET /api/v2/supersearch-enrichment/history/{resource_id}` - Enrichment history (`supersearch.Service.History`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
 
-* [ ] **[SuperSearchEnrichment](https://developer.instantly.ai/api-reference/supersearchenrichment)** - 11 operations
 * [ ] **[BlockListEntry](https://developer.instantly.ai/api-reference/blocklistentry)** - 9 operations
 * [ ] **[Webhook](https://developer.instantly.ai/api-reference/webhook)** - 8 operations
 * [ ] **[Workspace](https://developer.instantly.ai/api-reference/workspace)** - 8 operations
