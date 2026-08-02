@@ -112,6 +112,11 @@ its own credentials — a V1 key will not authenticate against V2, so
 settings and pass it to `NewClient`. Every request is then authenticated with an
 `Authorization: Bearer <key>` header against `https://api.instantly.ai`.
 
+The SDK is organized **AWS-SDK-v2 style**: a tiny root package holds the shared `Client`, and each API
+resource lives in its own subpackage (`email`, `campaign`, `account`, …). Construct the client once and
+hand it to a resource service. Importing a resource pulls in only that resource plus the root package
+and the standard library — never `testify` or the other resources.
+
 ```go
 package main
 
@@ -120,16 +125,18 @@ import (
 	"log"
 
 	"github.com/mrz1836/go-instantly"
+	"github.com/mrz1836/go-instantly/email"
 )
 
 func main() {
 	client := instantly.NewClient("[API-KEY]")
+	emails := email.New(client)
 
-	err := client.SendTestEmail(context.Background(), instantly.SendTestEmailRequest{
+	err := emails.SendTest(context.Background(), email.SendTestRequest{
 		EAccount:           "sender@example.com",
 		ToAddressEmailList: "recipient@example.com",
 		Subject:            "Testing the sending account",
-		Body: instantly.EmailBody{
+		Body: email.Body{
 			HTML: "<p>Hello from go-instantly.</p>",
 			Text: "Hello from go-instantly.",
 		},
@@ -143,22 +150,22 @@ func main() {
 List endpoints take **functional options**, so only the filters you actually pass are sent:
 
 ```go
-page, err := client.ListEmails(ctx,
-	instantly.WithEmailLimit(50),
-	instantly.WithEmailIsUnread(true),
-	instantly.WithEmailMode(instantly.EmailModeFocused),
+page, err := emails.List(ctx,
+	email.WithLimit(50),
+	email.WithIsUnread(true),
+	email.WithMode(email.ModeFocused),
 )
 ```
 
-Pagination is cursor based. `ListEmails` returns a single page, and `ListEmailsIter` walks every page
-for you as a [range-over-func](https://go.dev/blog/range-functions) iterator:
+Pagination is cursor based. `List` returns a single page, and `ListIter` walks every page for you as a
+[range-over-func](https://go.dev/blog/range-functions) iterator:
 
 ```go
-for email, err := range client.ListEmailsIter(ctx, instantly.WithEmailIsUnread(true)) {
+for message, err := range emails.ListIter(ctx, email.WithIsUnread(true)) {
 	if err != nil {
 		return err
 	}
-	log.Printf("%s: %s", email.ID, email.Subject)
+	log.Printf("%s: %s", message.ID, message.Subject)
 }
 ```
 
@@ -190,60 +197,96 @@ your projects without dragging along extra baggage.
 <summary><strong><code>Supported API Coverage</code></strong></summary>
 <br/>
 
-Coverage is built one resource at a time. The [Email API](https://developer.instantly.ai/api-reference/email)
-ships today; every remaining V2 resource is listed below with its operation count so you can see
-exactly what is left.
+Coverage is built one resource at a time against the
+[Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
+endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
+**26 / 171 operations · 3 / 28 resources** ship today (Email, Account, Account-Campaign Mappings);
+every remaining resource is listed below with a link to its reference docs and its operation count, so
+you can see exactly what is left.
 
-* [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([email.go](email.go))**
-	* [x] [`POST /api/v2/emails/test`](email.go) - Send a test email
-	* [x] [`GET /api/v2/emails`](email.go) - List emails
-	* [x] [`GET /api/v2/emails/{id}`](email.go) - Get an email
-	* [x] [`PATCH /api/v2/emails/{id}`](email.go) - Patch an email
-	* [x] [`DELETE /api/v2/emails/{id}`](email.go) - Delete an email
-	* [x] [`POST /api/v2/emails/reply`](email.go) - Reply to an email
-	* [x] [`POST /api/v2/emails/forward`](email.go) - Forward an email
-	* [x] [`GET /api/v2/emails/unread/count`](email.go) - Count unread emails
-	* [x] [`POST /api/v2/emails/threads/{thread_id}/mark-as-read`](email.go) - Mark all emails in a thread as read
+* [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
+	* [x] [`POST /api/v2/emails/test`](email/email.go) - Send a test email (`email.Service.SendTest`)
+	* [x] [`GET /api/v2/emails`](email/email.go) - List emails (`email.Service.List` / `ListIter`)
+	* [x] [`GET /api/v2/emails/{id}`](email/email.go) - Get an email (`email.Service.Get`)
+	* [x] [`PATCH /api/v2/emails/{id}`](email/email.go) - Patch an email (`email.Service.Update`)
+	* [x] [`DELETE /api/v2/emails/{id}`](email/email.go) - Delete an email (`email.Service.Delete`)
+	* [x] [`POST /api/v2/emails/reply`](email/email.go) - Reply to an email (`email.Service.Reply`)
+	* [x] [`POST /api/v2/emails/forward`](email/email.go) - Forward an email (`email.Service.Forward`)
+	* [x] [`GET /api/v2/emails/unread/count`](email/email.go) - Count unread emails (`email.Service.CountUnread`)
+	* [x] [`POST /api/v2/emails/threads/{thread_id}/mark-as-read`](email/email.go) - Mark a thread as read (`email.Service.MarkThreadAsRead`)
+* [x] **[Account API](https://developer.instantly.ai/api-reference/account) — ([`account/`](account/account.go))**
+	* [x] `POST /api/v2/accounts` - Create account (`account.Service.Create`)
+	* [x] `GET /api/v2/accounts` - List accounts (`account.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/accounts/{email}` - Get account (`account.Service.Get`)
+	* [x] `PATCH /api/v2/accounts/{email}` - Patch account (`account.Service.Update`)
+	* [x] `DELETE /api/v2/accounts/{email}` - Delete account (`account.Service.Delete`)
+	* [x] `POST /api/v2/accounts/{email}/pause` - Pause an account (`account.Service.Pause`)
+	* [x] `POST /api/v2/accounts/pause` - Pause multiple accounts (`account.Service.PauseBulk`)
+	* [x] `POST /api/v2/accounts/{email}/resume` - Resume an account (`account.Service.Resume`)
+	* [x] `POST /api/v2/accounts/{email}/mark-fixed` - Mark an account fixed (`account.Service.MarkFixed`)
+	* [x] `POST /api/v2/accounts/move` - Move accounts between workspaces (`account.Service.Move`)
+	* [x] `POST /api/v2/accounts/warmup/enable` - Enable warmup (`account.Service.EnableWarmup`)
+	* [x] `POST /api/v2/accounts/warmup/disable` - Disable warmup (`account.Service.DisableWarmup`)
+	* [x] `POST /api/v2/accounts/warmup-analytics` - Warmup analytics (`account.Service.WarmupAnalytics`)
+	* [x] `GET /api/v2/accounts/analytics/daily` - Daily analytics (`account.Service.DailyAnalytics`)
+	* [x] `GET /api/v2/accounts/ctd/status` - Custom tracking domain status (`account.Service.CtdStatus`)
+	* [x] `POST /api/v2/accounts/test/vitals` - Test account vitals (`account.Service.TestVitals`)
+* [x] **[Account-Campaign Mappings](https://developer.instantly.ai/api-reference/accountcampaignmapping) — ([`accountcampaign/`](accountcampaign/accountcampaign.go))**
+	* [x] `GET /api/v2/account-campaign-mappings/{email}` - Campaigns for an account (`accountcampaign.Service.List` / `ListIter`)
 
-**Coming soon** — the remaining V2 resources, with the number of operations each one covers:
+**Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
+reference docs:
 
-* [ ] **Campaign** - 19 operations
-* [ ] **Account** - 16 operations
-* [ ] **Lead** - 13 operations
-* [ ] **SuperSearchEnrichment** - 11 operations
-* [ ] **BlockListEntry** - 9 operations
-* [ ] **CampaignSubsequence** - 9 operations
-* [ ] **Webhook** - 8 operations
-* [ ] **Workspace** - 8 operations
-* [ ] **Analytics** - 7 operations
-* [ ] **DFYEmailAccountOrder** - 7 operations
-* [ ] **CustomTag** - 6 operations
-* [ ] **InboxPlacementTest** - 6 operations
-* [ ] **LeadLabel** - 6 operations
-* [ ] **LeadList** - 6 operations
-* [ ] **InboxPlacementAnalytics** - 5 operations
-* [ ] **WorkspaceGroupMember** - 5 operations
-* [ ] **WorkspaceMember** - 5 operations
-* [ ] **WebhookEvent** - 4 operations
-* [ ] **APIKey** - 3 operations
-* [ ] **OAuth** - 3 operations
-* [ ] **BackgroundJob** - 2 operations
-* [ ] **CRMActions** - 2 operations
-* [ ] **EmailVerification** - 2 operations
-* [ ] **InboxPlacementBlacklistAndSpamAssassinReport** - 2 operations
-* [ ] **WorkspaceBilling** - 2 operations
-* [ ] **AccountCampaignMapping** - 1 operation
-* [ ] **AuditLog** - 1 operation
-* [ ] **CustomTagMapping** - 1 operation
+* [ ] **[Campaign](https://developer.instantly.ai/api-reference/campaign)** - 19 operations
+* [ ] **[Lead](https://developer.instantly.ai/api-reference/lead)** - 13 operations
+* [ ] **[SuperSearchEnrichment](https://developer.instantly.ai/api-reference/supersearchenrichment)** - 11 operations
+* [ ] **[BlockListEntry](https://developer.instantly.ai/api-reference/blocklistentry)** - 9 operations
+* [ ] **[CampaignSubsequence](https://developer.instantly.ai/api-reference/campaignsubsequence)** - 9 operations
+* [ ] **[Webhook](https://developer.instantly.ai/api-reference/webhook)** - 8 operations
+* [ ] **[Workspace](https://developer.instantly.ai/api-reference/workspace)** - 8 operations
+* [ ] **[DFYEmailAccountOrder](https://developer.instantly.ai/api-reference/dfyemailaccountorder)** - 7 operations
+* [ ] **[CustomTag](https://developer.instantly.ai/api-reference/customtag)** - 6 operations
+* [ ] **[InboxPlacementTest](https://developer.instantly.ai/api-reference/inboxplacementtest)** - 6 operations
+* [ ] **[LeadLabel](https://developer.instantly.ai/api-reference/leadlabel)** - 6 operations
+* [ ] **[LeadList](https://developer.instantly.ai/api-reference/leadlist)** - 6 operations
+* [ ] **[InboxPlacementAnalytics](https://developer.instantly.ai/api-reference/inboxplacementanalytics)** - 5 operations
+* [ ] **[WorkspaceGroupMember](https://developer.instantly.ai/api-reference/workspacegroupmember)** - 5 operations
+* [ ] **[WorkspaceMember](https://developer.instantly.ai/api-reference/workspacemember)** - 5 operations
+* [ ] **[WebhookEvent](https://developer.instantly.ai/api-reference/webhookevent)** - 4 operations
+* [ ] **[APIKey](https://developer.instantly.ai/api-reference/apikey)** - 3 operations
+* [ ] **[OAuth](https://developer.instantly.ai/api-reference/oauth)** - 3 operations
+* [ ] **[BackgroundJob](https://developer.instantly.ai/api-reference/backgroundjob)** - 2 operations
+* [ ] **[CRMActions](https://developer.instantly.ai/api-reference/crmactions)** - 2 operations
+* [ ] **[EmailVerification](https://developer.instantly.ai/api-reference/emailverification)** - 2 operations
+* [ ] **[InboxPlacementBlacklistAndSpamAssassinReport](https://developer.instantly.ai/api-reference/inboxplacementblacklistandspamassassinreport)** - 2 operations
+* [ ] **[WorkspaceBilling](https://developer.instantly.ai/api-reference/workspacebilling)** - 2 operations
+* [ ] **[AuditLog](https://developer.instantly.ai/api-reference/auditlog)** - 1 operation
+* [ ] **[CustomTagMapping](https://developer.instantly.ai/api-reference/customtagmapping)** - 1 operation
+
+> **Notes on the counts.** The **Analytics** area (7 operations) is cross-cutting — 3 endpoints live
+> under **Account** and 4 under **Campaign**, so they are counted within those resources rather than as
+> a separate group. Three additional tags — **CustomPromptTemplate**, **EmailTemplate**, and
+> **SalesFlow** — are declared in the V2 API but currently expose no public endpoints.
+
+Adding a resource? Follow the durable recipe in
+[`docs/adding-a-resource.md`](docs/adding-a-resource.md) — the `email` package is the reference
+implementation.
 
 </details>
 
 <details>
-<summary><strong><code>Custom HTTPClient Support</code></strong></summary>
+<summary><strong><code>Client Configuration (Functional Options)</code></strong></summary>
 <br/>
 
-Every field on the client is exported, so the HTTP client, the API key, and the base URL can all be
-replaced — useful for custom transports, proxies, or pointing the client at a test server.
+The client is **immutable after construction**: configure it once with functional options. This is
+safer than mutating shared state and is the idiomatic Go pattern. Available options:
+
+| Option | Purpose |
+|--------|---------|
+| `WithHTTPClient(*http.Client)` | Custom transport, proxy, or timeout |
+| `WithBaseURL(string)` | Point at a test server or gateway |
+| `WithUserAgent(string)` | Set the `User-Agent` header |
+| `WithHTTPHeader(key, value)` | Add an extra header to every request |
 
 ```go
 package main
@@ -257,14 +300,17 @@ import (
 
 // ....
 
-client := instantly.NewClient("[API-KEY]")
-
-client.HTTPClient = &http.Client{
-    Timeout: 30 * time.Second,
-}
+client := instantly.NewClient("[API-KEY]",
+    instantly.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
+    instantly.WithUserAgent("my-app/1.0"),
+)
 
 // ...
 ```
+
+Need an endpoint the typed resource packages do not wrap yet? The low-level plumbing is exported as an
+escape hatch: `client.Get`, `client.Post`, `client.Patch`, `client.Put`, `client.Delete`, `client.Do`,
+and `client.DoRaw` (raw bytes, for CSV and other non-JSON responses).
 </details>
 
 <details>
