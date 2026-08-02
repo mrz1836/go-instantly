@@ -32,13 +32,13 @@ func NewTestRouter() *TestRouter {
 }
 
 // ServeHTTP implements the http.Handler interface.
-func (tr *TestRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	for _, r := range tr.routes {
-		if r.method != req.Method {
+func (r *TestRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	for _, rt := range r.routes {
+		if rt.method != req.Method {
 			continue
 		}
 
-		if tr.matchRoute(r, req, w) {
+		if r.matchRoute(rt, req, w) {
 			return
 		}
 	}
@@ -51,8 +51,8 @@ func (tr *TestRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 //
 // Registering the same method and pattern twice replaces the previous handler,
 // so a suite can re-register a route with a different fixture.
-func (tr *TestRouter) HandleFunc(method, pattern string, handler http.HandlerFunc) {
-	r := route{
+func (r *TestRouter) HandleFunc(method, pattern string, handler http.HandlerFunc) {
+	rt := route{
 		method:  method,
 		pattern: pattern,
 		handler: handler,
@@ -60,80 +60,80 @@ func (tr *TestRouter) HandleFunc(method, pattern string, handler http.HandlerFun
 
 	// Check if pattern contains parameters (e.g., :id)
 	if strings.Contains(pattern, ":") {
-		r.regex, r.params = compilePattern(pattern)
+		rt.regex, rt.params = compilePattern(pattern)
 	}
 
 	// Replace existing route with same method+pattern
-	for i, existing := range tr.routes {
+	for i, existing := range r.routes {
 		if existing.method == method && existing.pattern == pattern {
-			tr.routes[i] = r
+			r.routes[i] = rt
 			return
 		}
 	}
 
-	tr.routes = append(tr.routes, r)
+	r.routes = append(r.routes, rt)
 }
 
 // Get registers a GET handler for the given pattern.
-func (tr *TestRouter) Get(pattern string, handler http.HandlerFunc) {
-	tr.HandleFunc(http.MethodGet, pattern, handler)
+func (r *TestRouter) Get(pattern string, handler http.HandlerFunc) {
+	r.HandleFunc(http.MethodGet, pattern, handler)
 }
 
 // Post registers a POST handler for the given pattern.
-func (tr *TestRouter) Post(pattern string, handler http.HandlerFunc) {
-	tr.HandleFunc(http.MethodPost, pattern, handler)
+func (r *TestRouter) Post(pattern string, handler http.HandlerFunc) {
+	r.HandleFunc(http.MethodPost, pattern, handler)
 }
 
 // Put registers a PUT handler for the given pattern.
-func (tr *TestRouter) Put(pattern string, handler http.HandlerFunc) {
-	tr.HandleFunc(http.MethodPut, pattern, handler)
+func (r *TestRouter) Put(pattern string, handler http.HandlerFunc) {
+	r.HandleFunc(http.MethodPut, pattern, handler)
 }
 
 // Delete registers a DELETE handler for the given pattern.
-func (tr *TestRouter) Delete(pattern string, handler http.HandlerFunc) {
-	tr.HandleFunc(http.MethodDelete, pattern, handler)
+func (r *TestRouter) Delete(pattern string, handler http.HandlerFunc) {
+	r.HandleFunc(http.MethodDelete, pattern, handler)
 }
 
 // Patch registers a PATCH handler for the given pattern.
-func (tr *TestRouter) Patch(pattern string, handler http.HandlerFunc) {
-	tr.HandleFunc(http.MethodPatch, pattern, handler)
+func (r *TestRouter) Patch(pattern string, handler http.HandlerFunc) {
+	r.HandleFunc(http.MethodPatch, pattern, handler)
 }
 
 // matchRoute attempts to match a route and execute its handler.
-func (tr *TestRouter) matchRoute(route route, r *http.Request, w http.ResponseWriter) bool {
+func (r *TestRouter) matchRoute(route route, req *http.Request, w http.ResponseWriter) bool {
 	if route.regex == nil {
-		return tr.matchExactRoute(route, r, w)
+		return r.matchExactRoute(route, req, w)
 	}
-	return tr.matchPatternRoute(route, r, w)
+	return r.matchPatternRoute(route, req, w)
 }
 
 // matchExactRoute handles routes without parameters.
-func (tr *TestRouter) matchExactRoute(route route, r *http.Request, w http.ResponseWriter) bool {
-	if route.pattern == r.URL.Path {
-		route.handler(w, r)
+func (r *TestRouter) matchExactRoute(route route, req *http.Request, w http.ResponseWriter) bool {
+	if route.pattern == req.URL.Path {
+		route.handler(w, req)
 		return true
 	}
 	return false
 }
 
 // matchPatternRoute handles routes with path parameters.
-func (tr *TestRouter) matchPatternRoute(route route, r *http.Request, w http.ResponseWriter) bool {
-	matches := route.regex.FindStringSubmatch(r.URL.Path)
+func (r *TestRouter) matchPatternRoute(route route, req *http.Request, w http.ResponseWriter) bool {
+	matches := route.regex.FindStringSubmatch(req.URL.Path)
 	if matches == nil {
 		return false
 	}
 
 	// Extract path parameters and add to request context
 	if len(matches) > 1 && len(route.params) > 0 {
-		ctx := r.Context()
+		ctx := req.Context()
 		for i, param := range route.params {
 			if i+1 < len(matches) {
 				ctx = context.WithValue(ctx, paramKey(param), matches[i+1])
 			}
 		}
-		r = r.WithContext(ctx)
+		req = req.WithContext(ctx)
 	}
-	route.handler(w, r)
+	route.handler(w, req)
 	return true
 }
 
