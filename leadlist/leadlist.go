@@ -1,20 +1,9 @@
-// Package leadlist provides typed access to the Instantly.ai V2 Lead List API.
-//
-// It wraps the /api/v2/lead-lists endpoints: creating, listing, reading,
-// patching, and deleting lead lists, plus reading a list's verification stats.
-//
-//	svc := leadlist.New(instantly.NewClient("[API-KEY]"))
-//	page, err := svc.List(ctx, leadlist.WithLimit(50))
-//
-// Importing this package pulls in only github.com/mrz1836/go-instantly and the
-// standard library.
 package leadlist
 
 import (
 	"context"
 	"encoding/json"
-	"iter"
-	"net/url"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 )
@@ -53,15 +42,19 @@ type LeadList struct {
 	OwnedBy *string `json:"owned_by,omitempty"`
 }
 
-// ListResponse is a single page of lead lists.
-type ListResponse struct {
-	// Items are the lead lists on this page.
-	Items []LeadList `json:"items"`
-
-	// NextStartingAfter is the cursor for the following page, and is empty on
-	// the last page.
-	NextStartingAfter string `json:"next_starting_after,omitempty"`
+// ParsedTimestampCreated parses TimestampCreated as an RFC 3339 time.
+//
+// The raw string field is left untouched so a decoded list re-encodes
+// byte-for-byte; call this accessor when a time.Time is needed.
+func (l *LeadList) ParsedTimestampCreated() (time.Time, error) {
+	return time.Parse(time.RFC3339, l.TimestampCreated)
 }
+
+// ListResponse is a single page of lead lists.
+//
+// It aliases instantly.Page[LeadList], the cursor-paginated envelope every
+// resource shares, so the generic pagination helpers accept List directly.
+type ListResponse = instantly.Page[LeadList]
 
 // VerificationStats are the verification statistics of a lead list.
 type VerificationStats struct {
@@ -99,85 +92,30 @@ type UpdateRequest struct {
 
 // Create adds a new lead list and returns it.
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*LeadList, error) {
-	out := &LeadList{}
-	if err := s.client.Post(ctx, basePath, req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[LeadList](ctx, s.client, basePath, req)
 }
 
 // List returns a single page of lead lists filtered by the supplied options.
 func (s *Service) List(ctx context.Context, opts ...ListOption) (*ListResponse, error) {
-	q := instantly.NewQuery()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(q)
-		}
-	}
-
-	out := &ListResponse{}
-	if err := s.client.Get(ctx, q.Path(basePath), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[ListResponse](ctx, s.client, instantly.ApplyOptions(opts...).Path(basePath))
 }
 
 // Get returns a single lead list by its unique identifier.
 func (s *Service) Get(ctx context.Context, id string) (*LeadList, error) {
-	out := &LeadList{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[LeadList](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // Update patches a lead list and returns its updated state.
 func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*LeadList, error) {
-	out := &LeadList{}
-	if err := s.client.Patch(ctx, basePath+"/"+url.PathEscape(id), req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PatchResult[LeadList](ctx, s.client, instantly.JoinPath(basePath, id), req)
 }
 
 // Delete deletes a lead list and returns the list that was deleted.
 func (s *Service) Delete(ctx context.Context, id string) (*LeadList, error) {
-	out := &LeadList{}
-	if err := s.client.Delete(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.DeleteResult[LeadList](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // VerificationStats returns the verification statistics of a lead list.
 func (s *Service) VerificationStats(ctx context.Context, id string) (*VerificationStats, error) {
-	out := &VerificationStats{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id)+"/verification-stats", out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
-}
-
-// ListIter walks every page of List, yielding each list with a nil error, or a
-// nil *LeadList with the first error.
-func (s *Service) ListIter(ctx context.Context, opts ...ListOption) iter.Seq2[*LeadList, error] {
-	return instantly.Iterate(ctx, func(ctx context.Context, cursor string) ([]LeadList, string, error) {
-		pageOpts := opts
-		if cursor != "" {
-			pageOpts = append(append([]ListOption(nil), opts...), WithStartingAfter(cursor))
-		}
-
-		page, err := s.List(ctx, pageOpts...)
-		if err != nil {
-			return nil, "", err
-		}
-
-		return page.Items, page.NextStartingAfter, nil
-	})
+	return instantly.GetResult[VerificationStats](ctx, s.client, instantly.JoinPath(basePath, id, "verification-stats"))
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -58,16 +57,35 @@ func (s *LeadListTestSuite) TestCreate() {
 	s.True(*got.HasEnrichmentTask)
 }
 
-// TestCreateFailure verifies a rejected create returns no list.
-func (s *LeadListTestSuite) TestCreateFailure() {
-	s.Router.Post(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "bad key")
+// TestFailures verifies every endpoint surfaces the documented API error.
+func (s *LeadListTestSuite) TestFailures() {
+	svc, ctx := s.svc(), context.Background()
+	s.RunFailures([]instantlytest.FailureCase{
+		{
+			Name: "create", Method: http.MethodPost, Path: listPath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.Create(ctx, leadlist.CreateRequest{}); return err },
+		},
+		{
+			Name: "list", Method: http.MethodGet, Path: listPath, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.List(ctx); return err },
+		},
+		{
+			Name: "get", Method: http.MethodGet, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Get(ctx, "missing"); return err },
+		},
+		{
+			Name: "update", Method: http.MethodPatch, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Update(ctx, "missing", leadlist.UpdateRequest{}); return err },
+		},
+		{
+			Name: "delete", Method: http.MethodDelete, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Delete(ctx, "missing"); return err },
+		},
+		{
+			Name: "verificationStats", Method: http.MethodGet, Path: statsPatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.VerificationStats(ctx, "missing"); return err },
+		},
 	})
-
-	got, err := s.svc().Create(context.Background(), leadlist.CreateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Nil(got)
 }
 
 // TestList verifies a page decodes, including nullable-vs-zero fields.
@@ -104,18 +122,6 @@ func (s *LeadListTestSuite) TestListWithoutOptions() {
 	s.Empty(page.Items)
 }
 
-// TestListFailure verifies a failed list returns no page.
-func (s *LeadListTestSuite) TestListFailure() {
-	s.Router.Get(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "slow")
-	})
-
-	page, err := s.svc().List(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(page)
-}
-
 // TestGet verifies a single list decodes.
 func (s *LeadListTestSuite) TestGet() {
 	s.Router.Get(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -127,18 +133,6 @@ func (s *LeadListTestSuite) TestGet() {
 
 	s.Require().NoError(err)
 	s.Equal("Prospects", got.Name)
-}
-
-// TestGetFailure verifies a missing list returns no value.
-func (s *LeadListTestSuite) TestGetFailure() {
-	s.Router.Get(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no list")
-	})
-
-	got, err := s.svc().Get(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestUpdate verifies the patch body is sent and the list decodes.
@@ -173,18 +167,6 @@ func (s *LeadListTestSuite) TestUpdateOmitsUnsetFields() {
 	s.NotNil(got)
 }
 
-// TestUpdateFailure verifies a failed patch returns no value.
-func (s *LeadListTestSuite) TestUpdateFailure() {
-	s.Router.Patch(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no list")
-	})
-
-	got, err := s.svc().Update(context.Background(), "missing", leadlist.UpdateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDelete verifies the deleted list is returned to the caller.
 func (s *LeadListTestSuite) TestDelete() {
 	s.Router.Delete(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -196,18 +178,6 @@ func (s *LeadListTestSuite) TestDelete() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestDeleteFailure verifies a failed delete returns no value.
-func (s *LeadListTestSuite) TestDeleteFailure() {
-	s.Router.Delete(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no list")
-	})
-
-	got, err := s.svc().Delete(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestVerificationStats verifies the stats decode, including the raw breakdown.
@@ -222,18 +192,6 @@ func (s *LeadListTestSuite) TestVerificationStats() {
 	s.Require().NoError(err)
 	s.Equal(int64(100), got.TotalLeads)
 	s.JSONEq(`{"verified":80,"invalid":20}`, string(got.Stats))
-}
-
-// TestVerificationStatsFailure verifies a failed request returns no value.
-func (s *LeadListTestSuite) TestVerificationStatsFailure() {
-	s.Router.Get(statsPatt, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no list")
-	})
-
-	got, err := s.svc().VerificationStats(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestListIter verifies the iterator stitches pages together and stops on error.
@@ -324,6 +282,17 @@ func (s *LeadListTestSuite) TestListOptions() {
 	}
 }
 
+// TestParsedTimestampCreated verifies the RFC 3339 accessor parses a valid
+// timestamp and reports an error for an unparseable one.
+func (s *LeadListTestSuite) TestParsedTimestampCreated() {
+	got, err := (&leadlist.LeadList{TimestampCreated: "2026-08-01T10:00:00.000Z"}).ParsedTimestampCreated()
+	s.Require().NoError(err)
+	s.Equal(2026, got.Year())
+
+	_, err = (&leadlist.LeadList{TimestampCreated: "not-a-timestamp"}).ParsedTimestampCreated()
+	s.Require().Error(err)
+}
+
 // svc builds a Lead List service pointed at the suite's mock client.
 func (s *LeadListTestSuite) svc() *leadlist.Service {
 	return leadlist.New(s.Client)
@@ -339,9 +308,5 @@ func listPage(ids []string, nextCursor string) string {
 		))
 	}
 
-	if nextCursor == "" {
-		return fmt.Sprintf(`{"items":[%s]}`, strings.Join(items, ","))
-	}
-
-	return fmt.Sprintf(`{"items":[%s],"next_starting_after":%q}`, strings.Join(items, ","), nextCursor)
+	return instantlytest.Page(items, nextCursor)
 }
