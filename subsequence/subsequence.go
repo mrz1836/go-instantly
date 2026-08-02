@@ -1,21 +1,9 @@
-// Package subsequence provides typed access to the Instantly.ai V2 Campaign
-// Subsequence API.
-//
-// It wraps the /api/v2/subsequences endpoints: creating, listing, reading,
-// patching, and deleting campaign subsequences; duplicating them; pausing and
-// resuming; and reading a subsequence's sending status.
-//
-//	svc := subsequence.New(instantly.NewClient("[API-KEY]"))
-//	page, err := svc.List(ctx, subsequence.WithParentCampaign("campaign-id"))
-//
-// Importing this package pulls in only github.com/mrz1836/go-instantly and the
-// standard library.
 package subsequence
 
 import (
 	"context"
 	"encoding/json"
-	"net/url"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 )
@@ -124,15 +112,19 @@ type Subsequence struct {
 	Sequences json.RawMessage `json:"sequences,omitempty"`
 }
 
-// ListResponse is a single page of subsequences.
-type ListResponse struct {
-	// Items are the subsequences on this page.
-	Items []Subsequence `json:"items"`
-
-	// NextStartingAfter is the cursor for the following page, and is empty on
-	// the last page.
-	NextStartingAfter string `json:"next_starting_after,omitempty"`
+// ParsedTimestampCreated parses TimestampCreated as an RFC 3339 time.
+//
+// The raw string field is left untouched so a decoded subsequence re-encodes
+// byte-for-byte; call this accessor when a time.Time is needed.
+func (sub *Subsequence) ParsedTimestampCreated() (time.Time, error) {
+	return time.Parse(time.RFC3339, sub.TimestampCreated)
 }
+
+// ListResponse is a single page of subsequences.
+//
+// It aliases instantly.Page[Subsequence], the cursor-paginated envelope every
+// resource shares, so the generic pagination helpers accept List directly.
+type ListResponse = instantly.Page[Subsequence]
 
 // CreateRequest is the body of a create-subsequence request.
 type CreateRequest struct {
@@ -200,69 +192,32 @@ type SendingStatus struct {
 
 // Create adds a new subsequence and returns it.
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*Subsequence, error) {
-	out := &Subsequence{}
-	if err := s.client.Post(ctx, basePath, req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Subsequence](ctx, s.client, basePath, req)
 }
 
 // List returns a single page of subsequences filtered by the supplied options.
 func (s *Service) List(ctx context.Context, opts ...ListOption) (*ListResponse, error) {
-	q := instantly.NewQuery()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(q)
-		}
-	}
-
-	out := &ListResponse{}
-	if err := s.client.Get(ctx, q.Path(basePath), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[ListResponse](ctx, s.client, instantly.ApplyOptions(opts...).Path(basePath))
 }
 
 // Get returns a single subsequence by its unique identifier.
 func (s *Service) Get(ctx context.Context, id string) (*Subsequence, error) {
-	out := &Subsequence{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[Subsequence](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // Update patches a subsequence and returns its updated state.
 func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*Subsequence, error) {
-	out := &Subsequence{}
-	if err := s.client.Patch(ctx, basePath+"/"+url.PathEscape(id), req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PatchResult[Subsequence](ctx, s.client, instantly.JoinPath(basePath, id), req)
 }
 
 // Delete deletes a subsequence and returns the subsequence that was deleted.
 func (s *Service) Delete(ctx context.Context, id string) (*Subsequence, error) {
-	out := &Subsequence{}
-	if err := s.client.Delete(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.DeleteResult[Subsequence](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // Duplicate copies a subsequence into a campaign and returns the new subsequence.
 func (s *Service) Duplicate(ctx context.Context, id string, req DuplicateRequest) (*Subsequence, error) {
-	out := &Subsequence{}
-	if err := s.client.Post(ctx, basePath+"/"+url.PathEscape(id)+"/duplicate", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Subsequence](ctx, s.client, instantly.JoinPath(basePath, id, "duplicate"), req)
 }
 
 // Pause pauses a subsequence and returns its updated state.
@@ -277,20 +232,10 @@ func (s *Service) Resume(ctx context.Context, id string) (*Subsequence, error) {
 
 // SendingStatus returns the sending status of a subsequence.
 func (s *Service) SendingStatus(ctx context.Context, id string) (*SendingStatus, error) {
-	out := &SendingStatus{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id)+"/sending-status", out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[SendingStatus](ctx, s.client, instantly.JoinPath(basePath, id, "sending-status"))
 }
 
 // action performs a POST lifecycle action that returns the subsequence.
 func (s *Service) action(ctx context.Context, id, verb string) (*Subsequence, error) {
-	out := &Subsequence{}
-	if err := s.client.Post(ctx, basePath+"/"+url.PathEscape(id)+"/"+verb, nil, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Subsequence](ctx, s.client, instantly.JoinPath(basePath, id, verb), nil)
 }

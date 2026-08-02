@@ -98,18 +98,6 @@ func (s *SubsequenceTestSuite) TestCreate() {
 	s.Equal(subsequence.DailyLimitCustom, got.DailyLimitMode)
 }
 
-// TestCreateFailure verifies a rejected create returns no subsequence.
-func (s *SubsequenceTestSuite) TestCreateFailure() {
-	s.Router.Post(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusPaymentRequired, "Payment Required", "limit")
-	})
-
-	got, err := s.svc().Create(context.Background(), subsequence.CreateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusPaymentRequired)
-	s.Nil(got)
-}
-
 // TestList verifies a page decodes, including nullable-vs-zero fields.
 func (s *SubsequenceTestSuite) TestList() {
 	s.Router.Get(listPath, func(w http.ResponseWriter, req *http.Request) {
@@ -145,18 +133,6 @@ func (s *SubsequenceTestSuite) TestListWithoutOptions() {
 	s.Empty(page.Items)
 }
 
-// TestListFailure verifies a failed list returns no page.
-func (s *SubsequenceTestSuite) TestListFailure() {
-	s.Router.Get(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "slow")
-	})
-
-	page, err := s.svc().List(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(page)
-}
-
 // TestGet verifies a single subsequence decodes, including the raw payloads.
 func (s *SubsequenceTestSuite) TestGet() {
 	s.Router.Get(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -170,18 +146,6 @@ func (s *SubsequenceTestSuite) TestGet() {
 	s.Equal("Follow up", got.Name)
 	s.JSONEq(`{"trigger":"no_reply"}`, string(got.Conditions))
 	s.JSONEq(`[{"steps":[]}]`, string(got.Sequences))
-}
-
-// TestGetFailure verifies a missing subsequence returns no value.
-func (s *SubsequenceTestSuite) TestGetFailure() {
-	s.Router.Get(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no subsequence")
-	})
-
-	got, err := s.svc().Get(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestUpdate verifies the patch body is sent and the subsequence decodes.
@@ -222,18 +186,6 @@ func (s *SubsequenceTestSuite) TestUpdateOmitsUnsetFields() {
 	s.NotNil(got)
 }
 
-// TestUpdateFailure verifies a failed patch returns no value.
-func (s *SubsequenceTestSuite) TestUpdateFailure() {
-	s.Router.Patch(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no subsequence")
-	})
-
-	got, err := s.svc().Update(context.Background(), "missing", subsequence.UpdateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDelete verifies the deleted subsequence is returned to the caller.
 func (s *SubsequenceTestSuite) TestDelete() {
 	s.Router.Delete(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -245,18 +197,6 @@ func (s *SubsequenceTestSuite) TestDelete() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestDeleteFailure verifies a failed delete returns no value.
-func (s *SubsequenceTestSuite) TestDeleteFailure() {
-	s.Router.Delete(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no subsequence")
-	})
-
-	got, err := s.svc().Delete(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestDuplicate verifies the duplicate body is sent and the new subsequence decodes.
@@ -279,18 +219,6 @@ func (s *SubsequenceTestSuite) TestDuplicate() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestDuplicateFailure verifies a failed duplicate returns no subsequence.
-func (s *SubsequenceTestSuite) TestDuplicateFailure() {
-	s.Router.Post(duplicatePatt, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no subsequence")
-	})
-
-	got, err := s.svc().Duplicate(context.Background(), "missing", subsequence.DuplicateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestPauseResume verifies the lifecycle actions POST with no body and return
@@ -329,18 +257,6 @@ func (s *SubsequenceTestSuite) TestPauseResume() {
 	}
 }
 
-// TestPauseFailure verifies a failed lifecycle action returns no subsequence.
-func (s *SubsequenceTestSuite) TestPauseFailure() {
-	s.Router.Post(pausePatt, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no subsequence")
-	})
-
-	got, err := s.svc().Pause(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestSendingStatus verifies the raw summary and diagnostics are preserved.
 func (s *SubsequenceTestSuite) TestSendingStatus() {
 	s.Router.Get(sendingPatt, func(w http.ResponseWriter, req *http.Request) {
@@ -353,18 +269,6 @@ func (s *SubsequenceTestSuite) TestSendingStatus() {
 	s.Require().NoError(err)
 	s.JSONEq(`{"sending":true}`, string(got.Summary))
 	s.JSONEq(`[{"code":"OK"}]`, string(got.Diagnostics))
-}
-
-// TestSendingStatusFailure verifies a failed status returns no value.
-func (s *SubsequenceTestSuite) TestSendingStatusFailure() {
-	s.Router.Get(sendingPatt, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no subsequence")
-	})
-
-	got, err := s.svc().SendingStatus(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestListIter verifies the iterator stitches pages together and stops on error.
@@ -453,6 +357,56 @@ func (s *SubsequenceTestSuite) TestListOptions() {
 			s.Equal(test.value, q.Get(test.key))
 		})
 	}
+}
+
+// TestFailures verifies every endpoint surfaces the documented API error.
+func (s *SubsequenceTestSuite) TestFailures() {
+	svc, ctx := s.svc(), context.Background()
+	s.RunFailures([]instantlytest.FailureCase{
+		{
+			Name: "create", Method: http.MethodPost, Path: listPath, Status: http.StatusPaymentRequired,
+			Call: func() error { _, err := svc.Create(ctx, subsequence.CreateRequest{}); return err },
+		},
+		{
+			Name: "list", Method: http.MethodGet, Path: listPath, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.List(ctx); return err },
+		},
+		{
+			Name: "get", Method: http.MethodGet, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Get(ctx, "missing"); return err },
+		},
+		{
+			Name: "update", Method: http.MethodPatch, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Update(ctx, "missing", subsequence.UpdateRequest{}); return err },
+		},
+		{
+			Name: "delete", Method: http.MethodDelete, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Delete(ctx, "missing"); return err },
+		},
+		{
+			Name: "duplicate", Method: http.MethodPost, Path: duplicatePatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Duplicate(ctx, "missing", subsequence.DuplicateRequest{}); return err },
+		},
+		{
+			Name: "pause", Method: http.MethodPost, Path: pausePatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Pause(ctx, "missing"); return err },
+		},
+		{
+			Name: "sendingStatus", Method: http.MethodGet, Path: sendingPatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.SendingStatus(ctx, "missing"); return err },
+		},
+	})
+}
+
+// TestParsedTimestampCreated verifies the RFC 3339 accessor parses a valid
+// timestamp and reports an error for an unparseable one.
+func (s *SubsequenceTestSuite) TestParsedTimestampCreated() {
+	got, err := (&subsequence.Subsequence{TimestampCreated: "2026-08-01T10:00:00.000Z"}).ParsedTimestampCreated()
+	s.Require().NoError(err)
+	s.Equal(2026, got.Year())
+
+	_, err = (&subsequence.Subsequence{TimestampCreated: "not-a-timestamp"}).ParsedTimestampCreated()
+	s.Require().Error(err)
 }
 
 // svc builds a Subsequence service pointed at the suite's mock client.

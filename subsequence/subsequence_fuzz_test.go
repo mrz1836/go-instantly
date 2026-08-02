@@ -14,18 +14,6 @@ import (
 	"github.com/mrz1836/go-instantly/subsequence"
 )
 
-// fuzzClient answers every request with the given status and body, so no fuzz
-// input ever reaches a network.
-func fuzzClient(statusCode int, body string) *instantly.Client {
-	return instantly.NewClient(instantlytest.APIKey, instantly.WithHTTPClient(
-		&http.Client{Transport: instantlytest.RoundTripFunc(
-			func(_ *http.Request) (*http.Response, error) {
-				return instantlytest.JSONResponse(statusCode, body), nil
-			},
-		)},
-	))
-}
-
 // FuzzSubsequenceSerialization round trips arbitrary field values through the
 // create and update bodies, asserting the encoding never panics and never drifts.
 func FuzzSubsequenceSerialization(f *testing.F) {
@@ -73,7 +61,7 @@ func FuzzSubsequenceResponseDecoding(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, body string) {
 		ctx := context.Background()
-		svc := subsequence.New(fuzzClient(http.StatusOK, body))
+		svc := subsequence.New(instantlytest.FuzzClient(http.StatusOK, body))
 
 		got, err := svc.Get(ctx, testID)
 		if err != nil {
