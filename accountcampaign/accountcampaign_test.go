@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -50,7 +49,7 @@ func (s *MappingTestSuite) TestList() {
 	s.Require().Len(page.Items, 1)
 	s.Equal("c1", page.Items[0].CampaignID)
 	s.Equal("Launch", page.Items[0].CampaignName)
-	s.Equal(int64(1), page.Items[0].Status)
+	s.Equal(accountcampaign.StatusActive, page.Items[0].Status)
 	s.Equal("cursor-2", page.NextStartingAfter)
 }
 
@@ -168,6 +167,17 @@ func (s *MappingTestSuite) TestListIterStopsOnError() {
 	instantlytest.AssertAPIError(s.T(), iterErr, http.StatusTooManyRequests)
 }
 
+// TestParsedTimestampCreated verifies the RFC 3339 accessor parses a valid
+// timestamp and reports an error for an unparseable one.
+func (s *MappingTestSuite) TestParsedTimestampCreated() {
+	got, err := (&accountcampaign.Mapping{TimestampCreated: "2026-08-01T10:00:00.000Z"}).ParsedTimestampCreated()
+	s.Require().NoError(err)
+	s.Equal(2026, got.Year())
+
+	_, err = (&accountcampaign.Mapping{TimestampCreated: "not-a-timestamp"}).ParsedTimestampCreated()
+	s.Require().Error(err)
+}
+
 // mappingPage renders one page of mappings for the given campaign identifiers.
 func mappingPage(ids []string, nextCursor string) string {
 	items := make([]string, 0, len(ids))
@@ -178,9 +188,5 @@ func mappingPage(ids []string, nextCursor string) string {
 		))
 	}
 
-	if nextCursor == "" {
-		return fmt.Sprintf(`{"items":[%s]}`, strings.Join(items, ","))
-	}
-
-	return fmt.Sprintf(`{"items":[%s],"next_starting_after":%q}`, strings.Join(items, ","), nextCursor)
+	return instantlytest.Page(items, nextCursor)
 }
