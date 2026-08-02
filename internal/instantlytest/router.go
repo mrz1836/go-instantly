@@ -39,13 +39,19 @@ func NewRouter() *Router {
 }
 
 // ServeHTTP implements the http.Handler interface.
+//
+// Exact routes take precedence over parameterized ones, so a literal path such
+// as /api/v2/campaigns/search-by-contact is never shadowed by an earlier-
+// registered /api/v2/campaigns/:id. Within each class, registration order wins.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	for _, rt := range r.routes {
-		if rt.method != req.Method {
-			continue
+		if rt.method == req.Method && rt.regex == nil && r.matchRoute(rt, req, w) {
+			return
 		}
+	}
 
-		if r.matchRoute(rt, req, w) {
+	for _, rt := range r.routes {
+		if rt.method == req.Method && rt.regex != nil && r.matchRoute(rt, req, w) {
 			return
 		}
 	}

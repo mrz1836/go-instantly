@@ -200,9 +200,9 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**26 / 171 operations · 3 / 28 resources** ship today (Email, Account, Account-Campaign Mappings);
-every remaining resource is listed below with a link to its reference docs and its operation count, so
-you can see exactly what is left.
+**45 / 171 operations · 4 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+Campaign); every remaining resource is listed below with a link to its reference docs and its operation
+count, so you can see exactly what is left.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
 	* [x] [`POST /api/v2/emails/test`](email/email.go) - Send a test email (`email.Service.SendTest`)
@@ -233,11 +233,30 @@ you can see exactly what is left.
 	* [x] `POST /api/v2/accounts/test/vitals` - Test account vitals (`account.Service.TestVitals`)
 * [x] **[Account-Campaign Mappings](https://developer.instantly.ai/api-reference/accountcampaignmapping) — ([`accountcampaign/`](accountcampaign/accountcampaign.go))**
 	* [x] `GET /api/v2/account-campaign-mappings/{email}` - Campaigns for an account (`accountcampaign.Service.List` / `ListIter`)
+* [x] **[Campaign API](https://developer.instantly.ai/api-reference/campaign) — ([`campaign/`](campaign/campaign.go))**
+	* [x] `POST /api/v2/campaigns` - Create campaign (`campaign.Service.Create`)
+	* [x] `GET /api/v2/campaigns` - List campaigns (`campaign.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/campaigns/{id}` - Get campaign (`campaign.Service.Get`)
+	* [x] `PATCH /api/v2/campaigns/{id}` - Patch campaign (`campaign.Service.Update`)
+	* [x] `DELETE /api/v2/campaigns/{id}` - Delete campaign (`campaign.Service.Delete`)
+	* [x] `POST /api/v2/campaigns/{id}/activate` - Activate/resume (`campaign.Service.Activate`)
+	* [x] `POST /api/v2/campaigns/{id}/pause` - Pause (`campaign.Service.Pause`)
+	* [x] `POST /api/v2/campaigns/{id}/duplicate` - Duplicate (`campaign.Service.Duplicate`)
+	* [x] `POST /api/v2/campaigns/{id}/share` - Share (`campaign.Service.Share`)
+	* [x] `POST /api/v2/campaigns/{id}/export` - Export to JSON (`campaign.Service.Export`)
+	* [x] `POST /api/v2/campaigns/{id}/from-export` - Create from export (`campaign.Service.CreateFromExport`)
+	* [x] `POST /api/v2/campaigns/{id}/variables` - Add variables (`campaign.Service.AddVariables`)
+	* [x] `GET /api/v2/campaigns/{id}/sending-status` - Sending status (`campaign.Service.SendingStatus`)
+	* [x] `GET /api/v2/campaigns/count-launched` - Launched count (`campaign.Service.CountLaunched`)
+	* [x] `GET /api/v2/campaigns/search-by-contact` - Search by contact (`campaign.Service.SearchByContact`)
+	* [x] `GET /api/v2/campaigns/analytics` - Analytics (`campaign.Service.Analytics`)
+	* [x] `GET /api/v2/campaigns/analytics/overview` - Analytics overview (`campaign.Service.AnalyticsOverview`)
+	* [x] `GET /api/v2/campaigns/analytics/daily` - Daily analytics (`campaign.Service.DailyAnalytics`)
+	* [x] `GET /api/v2/campaigns/analytics/steps` - Steps analytics (`campaign.Service.StepsAnalytics`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
 
-* [ ] **[Campaign](https://developer.instantly.ai/api-reference/campaign)** - 19 operations
 * [ ] **[Lead](https://developer.instantly.ai/api-reference/lead)** - 13 operations
 * [ ] **[SuperSearchEnrichment](https://developer.instantly.ai/api-reference/supersearchenrichment)** - 11 operations
 * [ ] **[BlockListEntry](https://developer.instantly.ai/api-reference/blocklistentry)** - 9 operations

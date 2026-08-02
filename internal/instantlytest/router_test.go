@@ -115,6 +115,32 @@ func TestRouterUnknownRouteIsNotFound(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
+// TestRouterExactBeatsParam verifies an exact route wins over a parameterized
+// one even when the parameterized route was registered first.
+func TestRouterExactBeatsParam(t *testing.T) {
+	router := instantlytest.NewRouter()
+
+	// Register the parameterized route first, so registration order alone would
+	// otherwise shadow the exact route below.
+	router.Get("/api/v2/campaigns/:id", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"which":"param"}`))
+	})
+	router.Get("/api/v2/campaigns/search-by-contact", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"which":"exact"}`))
+	})
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	status, body := get(t, server, "/api/v2/campaigns/search-by-contact")
+	require.Equal(t, http.StatusOK, status)
+	require.JSONEq(t, `{"which":"exact"}`, body, "the exact route must win over the :id route")
+
+	// A genuine id still reaches the parameterized route.
+	_, paramBody := get(t, server, "/api/v2/campaigns/abc-123")
+	require.JSONEq(t, `{"which":"param"}`, paramBody)
+}
+
 // TestRouterVerbHelpers verifies each verb helper registers under its method.
 func TestRouterVerbHelpers(t *testing.T) {
 	const path = "/api/v2/verbs"
