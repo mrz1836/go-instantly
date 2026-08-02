@@ -200,8 +200,9 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**79 / 171 operations · 8 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
-Campaign, Lead, Lead List, Lead Label, Campaign Subsequence); every remaining resource is listed below with a link to its
+**94 / 171 operations · 12 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+Campaign, Lead, Lead List, Lead Label, Campaign Subsequence, Email Verification, Inbox Placement Test,
+Inbox Placement Analytics, Inbox Placement Report); every remaining resource is listed below with a link to its
 reference docs and its operation count, so you can see exactly what is left.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
@@ -291,6 +292,25 @@ reference docs and its operation count, so you can see exactly what is left.
 	* [x] `POST /api/v2/subsequences/{id}/pause` - Pause (`subsequence.Service.Pause`)
 	* [x] `POST /api/v2/subsequences/{id}/resume` - Resume (`subsequence.Service.Resume`)
 	* [x] `GET /api/v2/subsequences/{id}/sending-status` - Sending status (`subsequence.Service.SendingStatus`)
+* [x] **[Email Verification API](https://developer.instantly.ai/api-reference/emailverification) — ([`emailverification/`](emailverification/emailverification.go))**
+	* [x] `POST /api/v2/email-verification` - Create verification (`emailverification.Service.Create`)
+	* [x] `GET /api/v2/email-verification/{email}` - Check verification (`emailverification.Service.Check`)
+* [x] **[Inbox Placement Test API](https://developer.instantly.ai/api-reference/inboxplacementtest) — ([`inboxtest/`](inboxtest/inboxtest.go))**
+	* [x] `POST /api/v2/inbox-placement-tests` - Create test (`inboxtest.Service.Create`)
+	* [x] `GET /api/v2/inbox-placement-tests` - List tests (`inboxtest.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/inbox-placement-tests/{id}` - Get test (`inboxtest.Service.Get`)
+	* [x] `PATCH /api/v2/inbox-placement-tests/{id}` - Patch test (`inboxtest.Service.Update`)
+	* [x] `DELETE /api/v2/inbox-placement-tests/{id}` - Delete test (`inboxtest.Service.Delete`)
+	* [x] `GET /api/v2/inbox-placement-tests/email-service-provider-options` - ESP options (`inboxtest.Service.ESPOptions`)
+* [x] **[Inbox Placement Analytics API](https://developer.instantly.ai/api-reference/inboxplacementanalytics) — ([`inboxanalytics/`](inboxanalytics/inboxanalytics.go))**
+	* [x] `GET /api/v2/inbox-placement-analytics` - List analytics (`inboxanalytics.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/inbox-placement-analytics/{id}` - Get analytics (`inboxanalytics.Service.Get`)
+	* [x] `POST /api/v2/inbox-placement-analytics/stats-by-test-id` - Stats by test id (`inboxanalytics.Service.StatsByTestID`)
+	* [x] `POST /api/v2/inbox-placement-analytics/deliverability-insights` - Deliverability insights (`inboxanalytics.Service.DeliverabilityInsights`)
+	* [x] `POST /api/v2/inbox-placement-analytics/stats-by-date` - Stats by date (`inboxanalytics.Service.StatsByDate`)
+* [x] **[Inbox Placement Report API](https://developer.instantly.ai/api-reference/inboxplacementblacklistandspamassassinreport) — ([`inboxreport/`](inboxreport/inboxreport.go))**
+	* [x] `GET /api/v2/inbox-placement-reports` - List reports (`inboxreport.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/inbox-placement-reports/{id}` - Get report (`inboxreport.Service.Get`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
@@ -301,8 +321,6 @@ reference docs:
 * [ ] **[Workspace](https://developer.instantly.ai/api-reference/workspace)** - 8 operations
 * [ ] **[DFYEmailAccountOrder](https://developer.instantly.ai/api-reference/dfyemailaccountorder)** - 7 operations
 * [ ] **[CustomTag](https://developer.instantly.ai/api-reference/customtag)** - 6 operations
-* [ ] **[InboxPlacementTest](https://developer.instantly.ai/api-reference/inboxplacementtest)** - 6 operations
-* [ ] **[InboxPlacementAnalytics](https://developer.instantly.ai/api-reference/inboxplacementanalytics)** - 5 operations
 * [ ] **[WorkspaceGroupMember](https://developer.instantly.ai/api-reference/workspacegroupmember)** - 5 operations
 * [ ] **[WorkspaceMember](https://developer.instantly.ai/api-reference/workspacemember)** - 5 operations
 * [ ] **[WebhookEvent](https://developer.instantly.ai/api-reference/webhookevent)** - 4 operations
@@ -310,8 +328,6 @@ reference docs:
 * [ ] **[OAuth](https://developer.instantly.ai/api-reference/oauth)** - 3 operations
 * [ ] **[BackgroundJob](https://developer.instantly.ai/api-reference/backgroundjob)** - 2 operations
 * [ ] **[CRMActions](https://developer.instantly.ai/api-reference/crmactions)** - 2 operations
-* [ ] **[EmailVerification](https://developer.instantly.ai/api-reference/emailverification)** - 2 operations
-* [ ] **[InboxPlacementBlacklistAndSpamAssassinReport](https://developer.instantly.ai/api-reference/inboxplacementblacklistandspamassassinreport)** - 2 operations
 * [ ] **[WorkspaceBilling](https://developer.instantly.ai/api-reference/workspacebilling)** - 2 operations
 * [ ] **[AuditLog](https://developer.instantly.ai/api-reference/auditlog)** - 1 operation
 * [ ] **[CustomTagMapping](https://developer.instantly.ai/api-reference/customtagmapping)** - 1 operation

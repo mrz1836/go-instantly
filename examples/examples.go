@@ -20,6 +20,9 @@ import (
 	"github.com/mrz1836/go-instantly"
 	"github.com/mrz1836/go-instantly/campaign"
 	"github.com/mrz1836/go-instantly/email"
+	"github.com/mrz1836/go-instantly/emailverification"
+	"github.com/mrz1836/go-instantly/inboxanalytics"
+	"github.com/mrz1836/go-instantly/inboxtest"
 )
 
 func main() {
@@ -41,6 +44,9 @@ func main() {
 	// client. Build the ones you need.
 	emails := email.New(client)
 	campaigns := campaign.New(client)
+	verifications := emailverification.New(client)
+	inboxTests := inboxtest.New(client)
+	inboxAnalytics := inboxanalytics.New(client)
 
 	ctx := context.Background()
 
@@ -69,6 +75,14 @@ func main() {
 	}
 
 	if err := exploreCampaigns(ctx, campaigns); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := verifyEmail(ctx, verifications); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := inboxPlacement(ctx, inboxTests, inboxAnalytics); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -109,6 +123,80 @@ func exploreCampaigns(ctx context.Context, campaigns *campaign.Service) error {
 	}
 
 	log.Printf("got %d days of campaign analytics", len(daily))
+
+	return nil
+}
+
+// verifyEmail submits an address for verification and polls a pending result.
+//
+// Verification can be asynchronous: an address that takes longer than ten
+// seconds comes back with a StatusPending result, which Check then polls to
+// completion. Setting a WebhookURL on the request receives the result instead.
+func verifyEmail(ctx context.Context, verifications *emailverification.Service) error {
+	result, err := verifications.Create(ctx, emailverification.CreateRequest{
+		Email: "prospect@example.com",
+	})
+	if err != nil {
+		return err
+	}
+
+	// A pending status is a normal result, not an error: the verification is
+	// still running. Read VerificationStatus, not the request-level Status.
+	if result.VerificationStatus == emailverification.StatusPending {
+		if result, err = verifications.Check(ctx, result.Email); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("verification for %s: %s", sanitize(result.Email), sanitize(string(result.VerificationStatus)))
+
+	return nil
+}
+
+// inboxPlacement lists inbox placement tests, reads the provider options a test
+// can target, creates a one-time test, and pulls its placement analytics.
+//
+// Placement analytics require a test id, so List takes it as a positional
+// argument rather than an option.
+func inboxPlacement(
+	ctx context.Context, tests *inboxtest.Service, analytics *inboxanalytics.Service,
+) error {
+	page, err := tests.List(ctx, inboxtest.WithStatus(inboxtest.StatusActive))
+	if err != nil {
+		return err
+	}
+
+	log.Printf("fetched %d active inbox placement tests", len(page.Items))
+
+	// The provider/audience combinations a test can send to come from ESPOptions.
+	options, err := tests.ESPOptions(ctx)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("there are %d ESP options to choose from", len(options))
+
+	created, err := tests.Create(ctx, inboxtest.CreateRequest{
+		Name:             "Weekly deliverability check",
+		Type:             inboxtest.TypeOneTime,
+		SendingMethod:    inboxtest.SendingFromInstantly,
+		EmailSubject:     "Are we landing in the inbox?",
+		EmailBody:        "<p>Seed message.</p>",
+		Emails:           []string{"sender@example.com"},
+		RecipientsLabels: options,
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("created inbox placement test %s", sanitize(created.ID))
+
+	events, err := analytics.List(ctx, created.ID, inboxanalytics.WithLimit(100))
+	if err != nil {
+		return err
+	}
+
+	log.Printf("test %s has %d placement events so far", sanitize(created.ID), len(events.Items))
 
 	return nil
 }
