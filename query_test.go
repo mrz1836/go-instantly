@@ -16,6 +16,8 @@ const (
 )
 
 func TestQuerySetters(t *testing.T) {
+	t.Parallel()
+
 	q := NewQuery()
 	q.SetString("search", "hello world")
 	q.SetInt("limit", 50)
@@ -28,6 +30,8 @@ func TestQuerySetters(t *testing.T) {
 }
 
 func TestQueryAddStringRepeats(t *testing.T) {
+	t.Parallel()
+
 	q := NewQuery()
 	q.AddString("emails", "a@b.com")
 	q.AddString("emails", "c@d.com")
@@ -38,6 +42,8 @@ func TestQueryAddStringRepeats(t *testing.T) {
 }
 
 func TestQuerySetLastValueWins(t *testing.T) {
+	t.Parallel()
+
 	q := NewQuery()
 	q.SetInt("limit", 25)
 	q.SetInt("limit", 100)
@@ -47,6 +53,8 @@ func TestQuerySetLastValueWins(t *testing.T) {
 }
 
 func TestQuerySettersAreChainable(t *testing.T) {
+	t.Parallel()
+
 	q := NewQuery().SetString("a", "1").SetInt("b", 2).SetBool("c", false)
 
 	assert.Equal(t, 3, q.Len())
@@ -56,12 +64,16 @@ func TestQuerySettersAreChainable(t *testing.T) {
 }
 
 func TestQueryGetUnset(t *testing.T) {
+	t.Parallel()
+
 	q := NewQuery()
 	assert.Empty(t, q.Get("missing"), "an unset key reads as the empty string")
 	assert.Zero(t, q.Len())
 }
 
 func TestSetEnum(t *testing.T) {
+	t.Parallel()
+
 	q := NewQuery()
 	SetEnum(q, "sort_order", SortOrderDesc)
 
@@ -70,6 +82,8 @@ func TestSetEnum(t *testing.T) {
 }
 
 func TestQueryEncode(t *testing.T) {
+	t.Parallel()
+
 	q := NewQuery()
 	q.SetString("search", "hello world")
 	q.SetString("eaccount", "sender@example.com")
@@ -81,28 +95,40 @@ func TestQueryEncode(t *testing.T) {
 }
 
 func TestQueryPathEmpty(t *testing.T) {
+	t.Parallel()
+
 	assert.Equal(t, testPath, NewQuery().Path(testPath), "no parameters returns the bare path")
 }
 
 func TestQueryPathNilReceiver(t *testing.T) {
+	t.Parallel()
+
 	var q *Query
 	assert.Equal(t, testPath, q.Path(testPath), "a nil query returns the bare path")
 }
 
 func TestQueryPathWithParams(t *testing.T) {
+	t.Parallel()
+
 	q := NewQuery().SetInt("limit", 50)
 	assert.Equal(t, "/api/v2/emails?limit=50", q.Path(testPath))
 }
 
 func TestBuildPathNilParams(t *testing.T) {
+	t.Parallel()
+
 	assert.Equal(t, testCountPath, BuildPath(testCountPath, nil), "nil params returns the path unchanged")
 }
 
 func TestBuildPathEmptyParams(t *testing.T) {
+	t.Parallel()
+
 	assert.Equal(t, testPath, BuildPath(testPath, url.Values{}), "empty params returns the path unchanged")
 }
 
 func TestBuildPathSingleParam(t *testing.T) {
+	t.Parallel()
+
 	params := url.Values{}
 	params.Set("limit", "50")
 
@@ -110,6 +136,8 @@ func TestBuildPathSingleParam(t *testing.T) {
 }
 
 func TestBuildPathMultipleParams(t *testing.T) {
+	t.Parallel()
+
 	params := url.Values{}
 	params.Set("limit", "50")
 	params.Set("is_unread", "true")
@@ -124,6 +152,8 @@ func TestBuildPathMultipleParams(t *testing.T) {
 }
 
 func TestBuildPathEncodesSpecialCharacters(t *testing.T) {
+	t.Parallel()
+
 	params := url.Values{}
 	params.Set("search", "hello world")
 	params.Set("eaccount", "sender@example.com")
@@ -137,6 +167,8 @@ func TestBuildPathEncodesSpecialCharacters(t *testing.T) {
 }
 
 func TestBuildPathPreservesEmptyValue(t *testing.T) {
+	t.Parallel()
+
 	params := url.Values{}
 	params.Set("search", "")
 

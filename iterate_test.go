@@ -50,6 +50,8 @@ func collect(seq func(func(*int, error) bool)) ([]int, error) {
 }
 
 func TestIterateWalksEveryPage(t *testing.T) {
+	t.Parallel()
+
 	calls := 0
 	pages := []page{
 		{items: []int{1, 2}, next: "c2"},
@@ -65,6 +67,8 @@ func TestIterateWalksEveryPage(t *testing.T) {
 }
 
 func TestIterateStopsOnError(t *testing.T) {
+	t.Parallel()
+
 	calls := 0
 	pages := []page{
 		{items: []int{1}, next: "c2"},
@@ -79,6 +83,8 @@ func TestIterateStopsOnError(t *testing.T) {
 }
 
 func TestIterateStopsOnEmptyPageWithCursor(t *testing.T) {
+	t.Parallel()
+
 	calls := 0
 	pages := []page{
 		{items: []int{1}, next: "c2"},
@@ -93,6 +99,8 @@ func TestIterateStopsOnEmptyPageWithCursor(t *testing.T) {
 }
 
 func TestIterateEmptyFirstPage(t *testing.T) {
+	t.Parallel()
+
 	calls := 0
 	pages := []page{{items: []int{}, next: "c2"}}
 
@@ -104,6 +112,8 @@ func TestIterateEmptyFirstPage(t *testing.T) {
 }
 
 func TestIterateStopsOnBreak(t *testing.T) {
+	t.Parallel()
+
 	calls := 0
 	pages := []page{{items: []int{1, 2, 3}, next: "c2"}}
 
@@ -121,6 +131,8 @@ func TestIterateStopsOnBreak(t *testing.T) {
 }
 
 func TestIterateStopsOnCancellationBeforeFirstPage(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -135,6 +147,8 @@ func TestIterateStopsOnCancellationBeforeFirstPage(t *testing.T) {
 }
 
 func TestIterateStopsOnCancellationBetweenPages(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
