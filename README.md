@@ -200,9 +200,9 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**45 / 171 operations · 4 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
-Campaign); every remaining resource is listed below with a link to its reference docs and its operation
-count, so you can see exactly what is left.
+**70 / 171 operations · 7 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+Campaign, Lead, Lead List, Lead Label); every remaining resource is listed below with a link to its
+reference docs and its operation count, so you can see exactly what is left.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
 	* [x] [`POST /api/v2/emails/test`](email/email.go) - Send a test email (`email.Service.SendTest`)
@@ -253,11 +253,38 @@ count, so you can see exactly what is left.
 	* [x] `GET /api/v2/campaigns/analytics/overview` - Analytics overview (`campaign.Service.AnalyticsOverview`)
 	* [x] `GET /api/v2/campaigns/analytics/daily` - Daily analytics (`campaign.Service.DailyAnalytics`)
 	* [x] `GET /api/v2/campaigns/analytics/steps` - Steps analytics (`campaign.Service.StepsAnalytics`)
+* [x] **[Lead API](https://developer.instantly.ai/api-reference/lead) — ([`lead/`](lead/lead.go))**
+	* [x] `POST /api/v2/leads` - Create lead (`lead.Service.Create`)
+	* [x] `POST /api/v2/leads/list` - List leads, POST-body filters + cursor (`lead.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/leads/{id}` - Get lead (`lead.Service.Get`)
+	* [x] `PATCH /api/v2/leads/{id}` - Patch lead (`lead.Service.Update`)
+	* [x] `DELETE /api/v2/leads/{id}` - Delete lead (`lead.Service.Delete`)
+	* [x] `DELETE /api/v2/leads` - Bulk delete, body on DELETE (`lead.Service.BulkDelete`)
+	* [x] `POST /api/v2/leads/add` - Bulk add (`lead.Service.BulkAdd`)
+	* [x] `POST /api/v2/leads/bulk-assign` - Bulk assign (`lead.Service.BulkAssign`)
+	* [x] `POST /api/v2/leads/move` - Move leads (`lead.Service.Move`)
+	* [x] `POST /api/v2/leads/merge` - Merge leads (`lead.Service.Merge`)
+	* [x] `POST /api/v2/leads/update-interest-status` - Update interest (`lead.Service.UpdateInterestStatus`)
+	* [x] `POST /api/v2/leads/subsequence/remove` - Remove from subsequence (`lead.Service.RemoveFromSubsequence`)
+	* [x] `POST /api/v2/leads/subsequence/move` - Move to subsequence (`lead.Service.MoveToSubsequence`)
+* [x] **[Lead List API](https://developer.instantly.ai/api-reference/leadlist) — ([`leadlist/`](leadlist/leadlist.go))**
+	* [x] `POST /api/v2/lead-lists` - Create (`leadlist.Service.Create`)
+	* [x] `GET /api/v2/lead-lists` - List (`leadlist.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/lead-lists/{id}` - Get (`leadlist.Service.Get`)
+	* [x] `PATCH /api/v2/lead-lists/{id}` - Patch (`leadlist.Service.Update`)
+	* [x] `DELETE /api/v2/lead-lists/{id}` - Delete (`leadlist.Service.Delete`)
+	* [x] `GET /api/v2/lead-lists/{id}/verification-stats` - Verification stats (`leadlist.Service.VerificationStats`)
+* [x] **[Lead Label API](https://developer.instantly.ai/api-reference/leadlabel) — ([`leadlabel/`](leadlabel/leadlabel.go))**
+	* [x] `POST /api/v2/lead-labels` - Create (`leadlabel.Service.Create`)
+	* [x] `GET /api/v2/lead-labels` - List (`leadlabel.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/lead-labels/{id}` - Get (`leadlabel.Service.Get`)
+	* [x] `PATCH /api/v2/lead-labels/{id}` - Patch (`leadlabel.Service.Update`)
+	* [x] `DELETE /api/v2/lead-labels/{id}` - Delete (`leadlabel.Service.Delete`)
+	* [x] `POST /api/v2/lead-labels/ai-reply-label` - Test AI reply label (`leadlabel.Service.TestAIReplyLabel`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
 
-* [ ] **[Lead](https://developer.instantly.ai/api-reference/lead)** - 13 operations
 * [ ] **[SuperSearchEnrichment](https://developer.instantly.ai/api-reference/supersearchenrichment)** - 11 operations
 * [ ] **[BlockListEntry](https://developer.instantly.ai/api-reference/blocklistentry)** - 9 operations
 * [ ] **[CampaignSubsequence](https://developer.instantly.ai/api-reference/campaignsubsequence)** - 9 operations
@@ -266,8 +293,6 @@ reference docs:
 * [ ] **[DFYEmailAccountOrder](https://developer.instantly.ai/api-reference/dfyemailaccountorder)** - 7 operations
 * [ ] **[CustomTag](https://developer.instantly.ai/api-reference/customtag)** - 6 operations
 * [ ] **[InboxPlacementTest](https://developer.instantly.ai/api-reference/inboxplacementtest)** - 6 operations
-* [ ] **[LeadLabel](https://developer.instantly.ai/api-reference/leadlabel)** - 6 operations
-* [ ] **[LeadList](https://developer.instantly.ai/api-reference/leadlist)** - 6 operations
 * [ ] **[InboxPlacementAnalytics](https://developer.instantly.ai/api-reference/inboxplacementanalytics)** - 5 operations
 * [ ] **[WorkspaceGroupMember](https://developer.instantly.ai/api-reference/workspacegroupmember)** - 5 operations
 * [ ] **[WorkspaceMember](https://developer.instantly.ai/api-reference/workspacemember)** - 5 operations
