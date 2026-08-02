@@ -34,6 +34,8 @@ func get(t *testing.T, server *httptest.Server, path string) (int, string) {
 // TestRouterPathParameters verifies the router extracts :param segments and
 // returns the empty string for a parameter that was not part of the pattern.
 func TestRouterPathParameters(t *testing.T) {
+	t.Parallel()
+
 	router := instantlytest.NewRouter()
 	router.Get("/api/v2/emails/:id/detail", func(w http.ResponseWriter, req *http.Request) {
 		assert.Equal(t, "email-123", instantlytest.PathParam(req, "id"))
@@ -51,6 +53,8 @@ func TestRouterPathParameters(t *testing.T) {
 
 // TestRouterMultipleParameters verifies more than one parameter is captured.
 func TestRouterMultipleParameters(t *testing.T) {
+	t.Parallel()
+
 	router := instantlytest.NewRouter()
 	router.Post("/api/v2/campaigns/:cid/leads/:lid", func(w http.ResponseWriter, req *http.Request) {
 		assert.Equal(t, "c1", instantlytest.PathParam(req, "cid"))
@@ -75,6 +79,8 @@ func TestRouterMultipleParameters(t *testing.T) {
 // TestRouterReplacesDuplicateRoutes verifies re-registering a method and pattern
 // replaces the previous handler instead of shadowing it.
 func TestRouterReplacesDuplicateRoutes(t *testing.T) {
+	t.Parallel()
+
 	router := instantlytest.NewRouter()
 	router.Get("/api/v2/replaced", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"first"}`))
@@ -94,6 +100,8 @@ func TestRouterReplacesDuplicateRoutes(t *testing.T) {
 // TestRouterUnknownRouteIsNotFound verifies unregistered paths fall through to a
 // 404, and that a registered path with the wrong method also misses.
 func TestRouterUnknownRouteIsNotFound(t *testing.T) {
+	t.Parallel()
+
 	router := instantlytest.NewRouter()
 	router.Get("/api/v2/known", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -115,9 +123,28 @@ func TestRouterUnknownRouteIsNotFound(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
+// TestRouterPatternRouteMisses verifies a parameterized route whose regex does
+// not match the request path falls through to a 404.
+func TestRouterPatternRouteMisses(t *testing.T) {
+	t.Parallel()
+
+	router := instantlytest.NewRouter()
+	router.Get("/api/v2/emails/:id", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	status, _ := get(t, server, "/api/v2/campaigns/other")
+	require.Equal(t, http.StatusNotFound, status)
+}
+
 // TestRouterExactBeatsParam verifies an exact route wins over a parameterized
 // one even when the parameterized route was registered first.
 func TestRouterExactBeatsParam(t *testing.T) {
+	t.Parallel()
+
 	router := instantlytest.NewRouter()
 
 	// Register the parameterized route first, so registration order alone would
@@ -143,6 +170,8 @@ func TestRouterExactBeatsParam(t *testing.T) {
 
 // TestRouterVerbHelpers verifies each verb helper registers under its method.
 func TestRouterVerbHelpers(t *testing.T) {
+	t.Parallel()
+
 	const path = "/api/v2/verbs"
 
 	router := instantlytest.NewRouter()

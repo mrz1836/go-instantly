@@ -63,3 +63,16 @@ func (s *Suite) TearDownSuite() {
 		s.Server.Close()
 	}
 }
+
+// RunFailures drives a table of failure cases: each row registers its failing
+// route, invokes the service call, and asserts the documented API error
+// surfaces with the expected status. It is the single runner every resource
+// suite's TestFailures delegates to.
+func (s *Suite) RunFailures(cases []FailureCase) {
+	for _, tc := range cases {
+		s.Run(tc.Name, func() {
+			s.Router.HandleFunc(tc.Method, tc.Path, FailHandler(tc.Status))
+			AssertAPIError(s.T(), tc.Call(), tc.Status)
+		})
+	}
+}

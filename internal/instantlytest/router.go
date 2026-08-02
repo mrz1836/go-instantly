@@ -175,12 +175,9 @@ func compilePattern(pattern string) (*regexp.Regexp, []string) {
 
 	regexPattern += "$"
 
-	regex, err := regexp.Compile(regexPattern)
-	if err != nil {
-		panic("invalid pattern: " + pattern)
-	}
-
-	return regex, params
+	// Every segment is either a QuoteMeta-escaped literal or the fixed param
+	// group, so the assembled pattern is always a valid regexp.
+	return regexp.MustCompile(regexPattern), params
 }
 
 // paramKey is the key type for storing path parameters in the request context.
