@@ -111,6 +111,17 @@
             "wastedassign",
             "zerologlint"
         ],
+        "exclusions": {
+            "rules": [
+                {
+                    "linters": [
+                        "gosec"
+                    ],
+                    "path": "examples/.*\\.go$",
+                    "text": "G706"
+                }
+            ]
+        },
         "settings": {
             "dogsled": {
                 "max-blank-identifiers": 2
