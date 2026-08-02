@@ -21,18 +21,6 @@ type fuzzEmailRequest struct {
 	HTML               string `json:"html"`
 }
 
-// fuzzClient returns a client whose transport answers every request with the
-// given status and body, so no fuzz input ever reaches a network.
-func fuzzClient(statusCode int, body string) *instantly.Client {
-	return instantly.NewClient(instantlytest.APIKey, instantly.WithHTTPClient(
-		&http.Client{Transport: instantlytest.RoundTripFunc(
-			func(_ *http.Request) (*http.Response, error) {
-				return instantlytest.JSONResponse(statusCode, body), nil
-			},
-		)},
-	))
-}
-
 // FuzzEmailSerialization round trips arbitrary field values through every email
 // request body, asserting the encoding never panics and never drifts.
 func FuzzEmailSerialization(f *testing.F) {
@@ -82,7 +70,7 @@ func FuzzEmailResponseDecoding(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, body string) {
 		ctx := context.Background()
-		svc := email.New(fuzzClient(http.StatusOK, body))
+		svc := email.New(instantlytest.FuzzClient(http.StatusOK, body))
 
 		got, err := svc.Get(ctx, emailID)
 		if err != nil {

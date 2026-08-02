@@ -1,7 +1,45 @@
 package email
 
 import (
+	"time"
+
 	"github.com/mrz1836/go-instantly"
+)
+
+// IStatus is the interest status an email can be filtered by.
+//
+// It mirrors the interest statuses recorded on a lead, delivered on an email as
+// the i_status field.
+type IStatus int64
+
+// The interest statuses an email can carry.
+const (
+	// IStatusOutOfOffice means the lead replied out of office.
+	IStatusOutOfOffice IStatus = 0
+
+	// IStatusInterested means the lead is interested.
+	IStatusInterested IStatus = 1
+
+	// IStatusMeetingBooked means a meeting was booked with the lead.
+	IStatusMeetingBooked IStatus = 2
+
+	// IStatusMeetingCompleted means a meeting with the lead was completed.
+	IStatusMeetingCompleted IStatus = 3
+
+	// IStatusWon means the lead was won.
+	IStatusWon IStatus = 4
+
+	// IStatusNotInterested means the lead is not interested.
+	IStatusNotInterested IStatus = -1
+
+	// IStatusWrongPerson means the lead was the wrong person.
+	IStatusWrongPerson IStatus = -2
+
+	// IStatusLost means the lead was lost.
+	IStatusLost IStatus = -3
+
+	// IStatusNoShow means the lead was a no-show.
+	IStatusNoShow IStatus = -4
 )
 
 // Mode filters listed emails by the inbox category they belong to.
@@ -36,11 +74,8 @@ const (
 
 // ListOption customizes a List request.
 //
-// Options are typed per resource rather than shared across the SDK, so passing
-// an option belonging to another resource is a compile error instead of a query
-// parameter that is silently ignored. Only the options actually passed reach the
-// API: an option that is never supplied sends no query parameter at all, rather
-// than sending an empty one.
+// Options are typed per resource, so passing an option from another resource is
+// a compile error. Only the options actually supplied are sent.
 type ListOption func(*instantly.Query)
 
 // WithLimit sets the maximum number of emails returned in a single page.
@@ -83,9 +118,9 @@ func WithListID(listID string) ListOption {
 }
 
 // WithIStatus restricts results to emails with the given interest status.
-func WithIStatus(status int) ListOption {
+func WithIStatus(status IStatus) ListOption {
 	return func(q *instantly.Query) {
-		q.SetInt("i_status", status)
+		q.SetInt("i_status", int(status))
 	}
 }
 
@@ -182,18 +217,18 @@ func WithType(emailType Type) ListOption {
 }
 
 // WithMinTimestampCreated restricts results to emails created at or after the
-// given timestamp.
-func WithMinTimestampCreated(timestamp string) ListOption {
+// given timestamp, sent as an RFC 3339 wire value.
+func WithMinTimestampCreated(timestamp time.Time) ListOption {
 	return func(q *instantly.Query) {
-		q.SetString("min_timestamp_created", timestamp)
+		q.SetString("min_timestamp_created", timestamp.Format(time.RFC3339))
 	}
 }
 
 // WithMaxTimestampCreated restricts results to emails created at or before the
-// given timestamp.
-func WithMaxTimestampCreated(timestamp string) ListOption {
+// given timestamp, sent as an RFC 3339 wire value.
+func WithMaxTimestampCreated(timestamp time.Time) ListOption {
 	return func(q *instantly.Query) {
-		q.SetString("max_timestamp_created", timestamp)
+		q.SetString("max_timestamp_created", timestamp.Format(time.RFC3339))
 	}
 }
 

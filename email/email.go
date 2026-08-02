@@ -3,7 +3,7 @@ package email
 import (
 	"context"
 	"encoding/json"
-	"net/url"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 )
@@ -146,22 +146,21 @@ type Email struct {
 	AIAgentID *string `json:"ai_agent_id,omitempty"`
 }
 
+// ParsedTimestampCreated parses TimestampCreated as an RFC 3339 time.
+//
+// The raw string field is left untouched so a decoded email re-encodes
+// byte-for-byte; call this accessor when a time.Time is needed.
+func (e *Email) ParsedTimestampCreated() (time.Time, error) {
+	return time.Parse(time.RFC3339, e.TimestampCreated)
+}
+
 // ListResponse is a single page of emails.
-type ListResponse struct {
-	// Items are the emails on this page.
-	Items []Email `json:"items"`
-
-	// NextStartingAfter is the cursor for the following page, and is empty on
-	// the last page. It is an opaque value that may be an identifier or a
-	// timestamp depending on the request, so it is never parsed.
-	NextStartingAfter string `json:"next_starting_after,omitempty"`
-}
-
-// UnreadCountResponse is the number of unread emails in the workspace.
-type UnreadCountResponse struct {
-	// Count is the number of unread emails.
-	Count int64 `json:"count"`
-}
+//
+// It aliases instantly.Page[Email], the cursor-paginated envelope every resource
+// shares, so the generic pagination helpers accept List directly. The cursor is
+// an opaque value that may be an identifier or a timestamp depending on the
+// request, so it is never parsed.
+type ListResponse = instantly.Page[Email]
 
 // MarkThreadReadResponse is the outcome of marking a thread as read.
 type MarkThreadReadResponse struct {
@@ -290,75 +289,38 @@ func (s *Service) SendTest(ctx context.Context, req SendTestRequest) error {
 // empty once the last page has been reached. The endpoint is rate limited to 20
 // requests per minute.
 func (s *Service) List(ctx context.Context, opts ...ListOption) (*ListResponse, error) {
-	q := instantly.NewQuery()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(q)
-		}
-	}
-
-	out := &ListResponse{}
-	if err := s.client.Get(ctx, q.Path(basePath), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[ListResponse](ctx, s.client, instantly.ApplyOptions(opts...).Path(basePath))
 }
 
 // Get returns a single email by its unique identifier.
 func (s *Service) Get(ctx context.Context, id string) (*Email, error) {
-	out := &Email{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[Email](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // Update patches an email and returns its updated state.
 func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*Email, error) {
-	out := &Email{}
-	if err := s.client.Patch(ctx, basePath+"/"+url.PathEscape(id), req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PatchResult[Email](ctx, s.client, instantly.JoinPath(basePath, id), req)
 }
 
 // Delete deletes an email and returns the email that was deleted.
 func (s *Service) Delete(ctx context.Context, id string) (*Email, error) {
-	out := &Email{}
-	if err := s.client.Delete(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.DeleteResult[Email](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // Reply replies to an existing email and returns the reply that was sent.
 func (s *Service) Reply(ctx context.Context, req ReplyRequest) (*Email, error) {
-	out := &Email{}
-	if err := s.client.Post(ctx, basePath+"/reply", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Email](ctx, s.client, basePath+"/reply", req)
 }
 
 // Forward forwards an existing email and returns the forward that was sent.
 func (s *Service) Forward(ctx context.Context, req ForwardRequest) (*Email, error) {
-	out := &Email{}
-	if err := s.client.Post(ctx, basePath+"/forward", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Email](ctx, s.client, basePath+"/forward", req)
 }
 
 // CountUnread returns the number of unread emails in the workspace.
 func (s *Service) CountUnread(ctx context.Context) (int64, error) {
-	out := &UnreadCountResponse{}
-	if err := s.client.Get(ctx, basePath+"/unread/count", out); err != nil {
+	out, err := instantly.GetResult[instantly.CountResponse](ctx, s.client, basePath+"/unread/count")
+	if err != nil {
 		return 0, err
 	}
 
@@ -371,7 +333,7 @@ func (s *Service) CountUnread(ctx context.Context) (int64, error) {
 // nil error, so the response is decoded purely to validate its shape.
 func (s *Service) MarkThreadAsRead(ctx context.Context, threadID string) error {
 	out := &MarkThreadReadResponse{}
-	path := basePath + "/threads/" + url.PathEscape(threadID) + "/mark-as-read"
+	path := instantly.JoinPath(basePath, "threads", threadID, "mark-as-read")
 
 	return s.client.Post(ctx, path, nil, out)
 }

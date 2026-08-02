@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -189,17 +190,6 @@ func (s *EmailTestSuite) TestSendTestAccountError() {
 	s.Equal(int64(http.StatusOK), apiErr.StatusCode)
 }
 
-// TestSendTestFailure verifies a rate-limited send surfaces the envelope.
-func (s *EmailTestSuite) TestSendTestFailure() {
-	s.Router.Post(sendTestPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "10 per minute")
-	})
-
-	err := s.svc().SendTest(context.Background(), email.SendTestRequest{EAccount: eAccount})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-}
-
 // TestList verifies a page decodes and the cursor is preserved.
 func (s *EmailTestSuite) TestList() {
 	s.Router.Get(listPath, func(w http.ResponseWriter, req *http.Request) {
@@ -264,18 +254,6 @@ func (s *EmailTestSuite) TestListIgnoresNilOption() {
 	s.Require().NotNil(page)
 }
 
-// TestListFailure verifies a rate-limited list returns no page.
-func (s *EmailTestSuite) TestListFailure() {
-	s.Router.Get(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "20 per minute")
-	})
-
-	page, err := s.svc().List(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(page, "a failed list must not hand back a page")
-}
-
 // TestGet verifies a single email decodes, including its nullable fields.
 func (s *EmailTestSuite) TestGet() {
 	s.Router.Get(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -306,18 +284,6 @@ func (s *EmailTestSuite) TestGet() {
 	s.Require().NotNil(got.AIInterestValue)
 	s.InDelta(3, *got.AIInterestValue, 0)
 	s.JSONEq(`[{"name":"Lead","address":"lead@example.com"}]`, string(got.FromAddressJSON))
-}
-
-// TestGetFailure verifies a missing email returns no value.
-func (s *EmailTestSuite) TestGetFailure() {
-	s.Router.Get(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "Email not found")
-	})
-
-	got, err := s.svc().Get(context.Background(), "missing-uuid")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got, "a failed lookup must not hand back an email")
 }
 
 // TestUpdate verifies the patch body is sent and the updated email decodes.
@@ -361,18 +327,6 @@ func (s *EmailTestSuite) TestUpdateOmitsUnsetFields() {
 	s.Require().NotNil(got)
 }
 
-// TestUpdateFailure verifies a missing email returns no value.
-func (s *EmailTestSuite) TestUpdateFailure() {
-	s.Router.Patch(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "Email not found")
-	})
-
-	got, err := s.svc().Update(context.Background(), "missing-uuid", email.UpdateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDelete verifies the deleted email is returned to the caller.
 func (s *EmailTestSuite) TestDelete() {
 	s.Router.Delete(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -387,18 +341,6 @@ func (s *EmailTestSuite) TestDelete() {
 	s.Require().NoError(err)
 	s.Require().NotNil(got)
 	s.Equal(emailID, got.ID)
-}
-
-// TestDeleteFailure verifies a missing email returns no value.
-func (s *EmailTestSuite) TestDeleteFailure() {
-	s.Router.Delete(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "Email not found")
-	})
-
-	got, err := s.svc().Delete(context.Background(), "missing-uuid")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestReply verifies every documented reply field reaches the API.
@@ -459,18 +401,6 @@ func (s *EmailTestSuite) TestReplyOmitsUnsetFields() {
 	s.Require().NotNil(got)
 }
 
-// TestReplyFailure verifies a plan-limited reply returns no value.
-func (s *EmailTestSuite) TestReplyFailure() {
-	s.Router.Post(replyPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusPaymentRequired, "Payment Required", "Plan limit reached")
-	})
-
-	got, err := s.svc().Reply(context.Background(), email.ReplyRequest{ReplyToUUID: emailID})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusPaymentRequired)
-	s.Nil(got)
-}
-
 // TestForward verifies every documented forward field reaches the API.
 func (s *EmailTestSuite) TestForward() {
 	s.Router.Post(forwardPath, func(w http.ResponseWriter, req *http.Request) {
@@ -511,18 +441,6 @@ func (s *EmailTestSuite) TestForward() {
 	s.Equal(emailID, got.ID)
 }
 
-// TestForwardFailure verifies an unauthorized forward returns no value.
-func (s *EmailTestSuite) TestForwardFailure() {
-	s.Router.Post(forwardPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "Invalid API key")
-	})
-
-	got, err := s.svc().Forward(context.Background(), email.ForwardRequest{ReplyToUUID: emailID})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Nil(got)
-}
-
 // TestCountUnread verifies the unread count is unwrapped for the caller.
 func (s *EmailTestSuite) TestCountUnread() {
 	s.Router.Get(countPath, func(w http.ResponseWriter, req *http.Request) {
@@ -536,18 +454,6 @@ func (s *EmailTestSuite) TestCountUnread() {
 
 	s.Require().NoError(err)
 	s.Equal(int64(42), count)
-}
-
-// TestCountUnreadFailure verifies a failed count reports zero and an error.
-func (s *EmailTestSuite) TestCountUnreadFailure() {
-	s.Router.Get(countPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "Invalid API key")
-	})
-
-	count, err := s.svc().CountUnread(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Zero(count, "a failed count must not report a number the API never sent")
 }
 
 // TestMarkThreadAsRead verifies the thread endpoint is called without a body.
@@ -566,17 +472,6 @@ func (s *EmailTestSuite) TestMarkThreadAsRead() {
 	err := s.svc().MarkThreadAsRead(context.Background(), threadID)
 
 	s.Require().NoError(err)
-}
-
-// TestMarkThreadAsReadFailure verifies a missing thread surfaces the envelope.
-func (s *EmailTestSuite) TestMarkThreadAsReadFailure() {
-	s.Router.Post(threadPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "Thread not found")
-	})
-
-	err := s.svc().MarkThreadAsRead(context.Background(), "missing-thread")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
 }
 
 // TestPathParametersAreEscaped verifies a caller-supplied identifier cannot
@@ -638,7 +533,7 @@ func (s *EmailTestSuite) TestListOptions() {
 		{"search", email.WithSearch("quick question"), "search", "quick question"},
 		{"campaign id", email.WithCampaignID("campaign-uuid-1"), "campaign_id", "campaign-uuid-1"},
 		{"list id", email.WithListID("list-uuid-1"), "list_id", "list-uuid-1"},
-		{"interest status", email.WithIStatus(1), "i_status", "1"},
+		{"interest status", email.WithIStatus(email.IStatusInterested), "i_status", "1"},
 		{"sending account", email.WithAccount(eAccount), "eaccount", eAccount},
 		{"is unread", email.WithIsUnread(true), "is_unread", "true"},
 		{"has reminder", email.WithHasReminder(false), "has_reminder", "false"},
@@ -653,13 +548,13 @@ func (s *EmailTestSuite) TestListOptions() {
 		{"email type", email.WithType(email.TypeReceived), "email_type", "received"},
 		{
 			"min timestamp created",
-			email.WithMinTimestampCreated("2026-01-01T00:00:00.000Z"),
-			"min_timestamp_created", "2026-01-01T00:00:00.000Z",
+			email.WithMinTimestampCreated(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+			"min_timestamp_created", "2026-01-01T00:00:00Z",
 		},
 		{
 			"max timestamp created",
-			email.WithMaxTimestampCreated("2026-12-31T23:59:59.000Z"),
-			"max_timestamp_created", "2026-12-31T23:59:59.000Z",
+			email.WithMaxTimestampCreated(time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC)),
+			"max_timestamp_created", "2026-12-31T23:59:59Z",
 		},
 		{"latest of thread", email.WithLatestOfThread(true), "latest_of_thread", "true"},
 	}
@@ -749,6 +644,60 @@ func (s *EmailTestSuite) TestListOptionsReachTheAPI() {
 	)
 
 	s.Require().NoError(err)
+}
+
+// TestFailures verifies every endpoint surfaces the documented API error.
+func (s *EmailTestSuite) TestFailures() {
+	svc, ctx := s.svc(), context.Background()
+	s.RunFailures([]instantlytest.FailureCase{
+		{
+			Name: "sendTest", Method: http.MethodPost, Path: sendTestPath, Status: http.StatusTooManyRequests,
+			Call: func() error { return svc.SendTest(ctx, email.SendTestRequest{}) },
+		},
+		{
+			Name: "list", Method: http.MethodGet, Path: listPath, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.List(ctx); return err },
+		},
+		{
+			Name: "get", Method: http.MethodGet, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Get(ctx, "missing"); return err },
+		},
+		{
+			Name: "update", Method: http.MethodPatch, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Update(ctx, "missing", email.UpdateRequest{}); return err },
+		},
+		{
+			Name: "delete", Method: http.MethodDelete, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Delete(ctx, "missing"); return err },
+		},
+		{
+			Name: "reply", Method: http.MethodPost, Path: replyPath, Status: http.StatusPaymentRequired,
+			Call: func() error { _, err := svc.Reply(ctx, email.ReplyRequest{}); return err },
+		},
+		{
+			Name: "forward", Method: http.MethodPost, Path: forwardPath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.Forward(ctx, email.ForwardRequest{}); return err },
+		},
+		{
+			Name: "countUnread", Method: http.MethodGet, Path: countPath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.CountUnread(ctx); return err },
+		},
+		{
+			Name: "markThreadAsRead", Method: http.MethodPost, Path: threadPattern, Status: http.StatusNotFound,
+			Call: func() error { return svc.MarkThreadAsRead(ctx, "missing") },
+		},
+	})
+}
+
+// TestParsedTimestampCreated verifies the RFC 3339 accessor parses a valid
+// timestamp and reports an error for an unparseable one.
+func (s *EmailTestSuite) TestParsedTimestampCreated() {
+	got, err := (&email.Email{TimestampCreated: "2026-08-01T10:00:00.000Z"}).ParsedTimestampCreated()
+	s.Require().NoError(err)
+	s.Equal(2026, got.Year())
+
+	_, err = (&email.Email{TimestampCreated: "not-a-timestamp"}).ParsedTimestampCreated()
+	s.Require().Error(err)
 }
 
 // svc builds an Email service pointed at the suite's mock client.
