@@ -471,8 +471,11 @@ magex bench
 
 ### 📊 Performance Results
 
-_Published benchmark results are pending._ Once a benchmark suite lands, measured numbers will be
-recorded here rather than estimated.
+A benchmark suite now covers the hot paths — query encoding and path building (`Query.Encode`,
+`BuildPath`), the response-error probe (`checkResponse`), cursor iteration (`Iterate`), the reusable
+list helpers (`JoinPath`, `ApplyOptions`), and a representative resource decode and round-trip
+(`CampaignDecode`, `CampaignGet`). Run `magex bench` to measure them on your own hardware; numbers vary
+by machine, so they are reproduced locally rather than pinned here.
 
 <br/>
 

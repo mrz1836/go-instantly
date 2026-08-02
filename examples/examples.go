@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/mrz1836/go-instantly"
+	"github.com/mrz1836/go-instantly/campaign"
 	"github.com/mrz1836/go-instantly/email"
 )
 
@@ -36,8 +37,10 @@ func main() {
 		instantly.WithUserAgent("my-app/1.0"),
 	)
 
-	// Each resource lives in its own package. Build a service from the client.
+	// Each resource lives in its own package, and every service shares the one
+	// client. Build the ones you need.
 	emails := email.New(client)
+	campaigns := campaign.New(client)
 
 	ctx := context.Background()
 
@@ -64,6 +67,50 @@ func main() {
 	if err := manageInbox(ctx, emails); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := exploreCampaigns(ctx, campaigns); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// exploreCampaigns lists campaigns and reads one, showing the typed options and
+// the time helpers a resource exposes.
+//
+// Enum-like filters are typed (campaign.StatusActive rather than a bare int),
+// date filters take a time.Time and are formatted to the wire for you, and the
+// string timestamp fields carry a Parsed accessor so a decoded value still
+// re-encodes byte-for-byte.
+func exploreCampaigns(ctx context.Context, campaigns *campaign.Service) error {
+	page, err := campaigns.List(ctx,
+		campaign.WithLimit(25),
+		campaign.WithStatus(campaign.StatusActive),
+	)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("fetched %d active campaigns", len(page.Items))
+
+	// TimestampCreated stays a string on the model; parse it only when a
+	// time.Time is what you need.
+	if len(page.Items) > 0 {
+		if created, perr := page.Items[0].ParsedTimestampCreated(); perr == nil {
+			log.Printf("first campaign created %s", created.Format(time.RFC3339))
+		}
+	}
+
+	// Analytics date filters accept a time.Time directly.
+	daily, err := campaigns.DailyAnalytics(ctx,
+		campaign.WithStartDate(time.Now().AddDate(0, -1, 0)),
+		campaign.WithEndDate(time.Now()),
+	)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("got %d days of campaign analytics", len(daily))
+
+	return nil
 }
 
 // sendTestEmail sends a test email and shows how to inspect a typed API error.
