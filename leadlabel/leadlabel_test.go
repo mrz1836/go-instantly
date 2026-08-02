@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -61,18 +60,6 @@ func (s *LeadLabelTestSuite) TestCreate() {
 	s.Equal(int64(1), got.InterestStatus)
 }
 
-// TestCreateFailure verifies a rejected create returns no label.
-func (s *LeadLabelTestSuite) TestCreateFailure() {
-	s.Router.Post(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "bad key")
-	})
-
-	got, err := s.svc().Create(context.Background(), leadlabel.CreateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Nil(got)
-}
-
 // TestList verifies a page decodes, including nullable-vs-zero fields.
 func (s *LeadLabelTestSuite) TestList() {
 	s.Router.Get(listPath, func(w http.ResponseWriter, req *http.Request) {
@@ -109,18 +96,6 @@ func (s *LeadLabelTestSuite) TestListWithoutOptions() {
 	s.Empty(page.Items)
 }
 
-// TestListFailure verifies a failed list returns no page.
-func (s *LeadLabelTestSuite) TestListFailure() {
-	s.Router.Get(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "slow")
-	})
-
-	page, err := s.svc().List(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(page)
-}
-
 // TestGet verifies a single label decodes.
 func (s *LeadLabelTestSuite) TestGet() {
 	s.Router.Get(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -132,18 +107,6 @@ func (s *LeadLabelTestSuite) TestGet() {
 
 	s.Require().NoError(err)
 	s.Equal("Interested", got.Label)
-}
-
-// TestGetFailure verifies a missing label returns no value.
-func (s *LeadLabelTestSuite) TestGetFailure() {
-	s.Router.Get(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no label")
-	})
-
-	got, err := s.svc().Get(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestUpdate verifies the patch body is sent and the label decodes.
@@ -178,18 +141,6 @@ func (s *LeadLabelTestSuite) TestUpdateOmitsUnsetFields() {
 	s.NotNil(got)
 }
 
-// TestUpdateFailure verifies a failed patch returns no value.
-func (s *LeadLabelTestSuite) TestUpdateFailure() {
-	s.Router.Patch(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no label")
-	})
-
-	got, err := s.svc().Update(context.Background(), "missing", leadlabel.UpdateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDelete verifies the deleted label is returned to the caller.
 func (s *LeadLabelTestSuite) TestDelete() {
 	s.Router.Delete(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -201,18 +152,6 @@ func (s *LeadLabelTestSuite) TestDelete() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestDeleteFailure verifies a failed delete returns no value.
-func (s *LeadLabelTestSuite) TestDeleteFailure() {
-	s.Router.Delete(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no label")
-	})
-
-	got, err := s.svc().Delete(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestTestAIReplyLabel verifies the reply text is sent and the raw result decodes.
@@ -232,18 +171,6 @@ func (s *LeadLabelTestSuite) TestTestAIReplyLabel() {
 	s.Require().NoError(err)
 	s.JSONEq(`{"label":"Interested"}`, string(got.Result))
 	s.JSONEq(`["Interested"]`, string(got.CustomLabelsConsidered))
-}
-
-// TestTestAIReplyLabelFailure verifies a failed classification returns no value.
-func (s *LeadLabelTestSuite) TestTestAIReplyLabelFailure() {
-	s.Router.Post(aiReplyPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "slow")
-	})
-
-	got, err := s.svc().TestAIReplyLabel(context.Background(), leadlabel.AIReplyLabelRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(got)
 }
 
 // TestListIter verifies the iterator stitches pages together and stops on error.
@@ -334,6 +261,48 @@ func (s *LeadLabelTestSuite) TestListOptions() {
 	}
 }
 
+// TestFailures verifies every endpoint surfaces the documented API error.
+func (s *LeadLabelTestSuite) TestFailures() {
+	svc, ctx := s.svc(), context.Background()
+	s.RunFailures([]instantlytest.FailureCase{
+		{
+			Name: "create", Method: http.MethodPost, Path: listPath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.Create(ctx, leadlabel.CreateRequest{}); return err },
+		},
+		{
+			Name: "list", Method: http.MethodGet, Path: listPath, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.List(ctx); return err },
+		},
+		{
+			Name: "get", Method: http.MethodGet, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Get(ctx, "missing"); return err },
+		},
+		{
+			Name: "update", Method: http.MethodPatch, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Update(ctx, "missing", leadlabel.UpdateRequest{}); return err },
+		},
+		{
+			Name: "delete", Method: http.MethodDelete, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Delete(ctx, "missing"); return err },
+		},
+		{
+			Name: "testAIReplyLabel", Method: http.MethodPost, Path: aiReplyPath, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.TestAIReplyLabel(ctx, leadlabel.AIReplyLabelRequest{}); return err },
+		},
+	})
+}
+
+// TestParsedTimestampCreated verifies the RFC 3339 accessor parses a valid
+// timestamp and reports an error for an unparseable one.
+func (s *LeadLabelTestSuite) TestParsedTimestampCreated() {
+	got, err := (&leadlabel.LeadLabel{TimestampCreated: "2026-08-01T10:00:00.000Z"}).ParsedTimestampCreated()
+	s.Require().NoError(err)
+	s.Equal(2026, got.Year())
+
+	_, err = (&leadlabel.LeadLabel{TimestampCreated: "not-a-timestamp"}).ParsedTimestampCreated()
+	s.Require().Error(err)
+}
+
 // svc builds a Lead Label service pointed at the suite's mock client.
 func (s *LeadLabelTestSuite) svc() *leadlabel.Service {
 	return leadlabel.New(s.Client)
@@ -350,9 +319,5 @@ func labelPage(ids []string, nextCursor string) string {
 		))
 	}
 
-	if nextCursor == "" {
-		return fmt.Sprintf(`{"items":[%s]}`, strings.Join(items, ","))
-	}
-
-	return fmt.Sprintf(`{"items":[%s],"next_starting_after":%q}`, strings.Join(items, ","), nextCursor)
+	return instantlytest.Page(items, nextCursor)
 }

@@ -1,21 +1,9 @@
-// Package leadlabel provides typed access to the Instantly.ai V2 Lead Label API.
-//
-// It wraps the /api/v2/lead-labels endpoints: creating, listing, reading,
-// patching, and deleting lead labels, plus testing which label an AI reply
-// classifier would assign to a reply.
-//
-//	svc := leadlabel.New(instantly.NewClient("[API-KEY]"))
-//	page, err := svc.List(ctx, leadlabel.WithLimit(50))
-//
-// Importing this package pulls in only github.com/mrz1836/go-instantly and the
-// standard library.
 package leadlabel
 
 import (
 	"context"
 	"encoding/json"
-	"iter"
-	"net/url"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 )
@@ -63,15 +51,19 @@ type LeadLabel struct {
 	UseWithAI *bool `json:"use_with_ai,omitempty"`
 }
 
-// ListResponse is a single page of lead labels.
-type ListResponse struct {
-	// Items are the lead labels on this page.
-	Items []LeadLabel `json:"items"`
-
-	// NextStartingAfter is the cursor for the following page, and is empty on
-	// the last page.
-	NextStartingAfter string `json:"next_starting_after,omitempty"`
+// ParsedTimestampCreated parses TimestampCreated as an RFC 3339 time.
+//
+// The raw string field is left untouched so a decoded label re-encodes
+// byte-for-byte; call this accessor when a time.Time is needed.
+func (l *LeadLabel) ParsedTimestampCreated() (time.Time, error) {
+	return time.Parse(time.RFC3339, l.TimestampCreated)
 }
+
+// ListResponse is a single page of lead labels.
+//
+// It aliases instantly.Page[LeadLabel], the cursor-paginated envelope every
+// resource shares, so the generic pagination helpers accept List directly.
+type ListResponse = instantly.Page[LeadLabel]
 
 // CreateRequest is the body of a create-lead-label request.
 type CreateRequest struct {
@@ -122,86 +114,31 @@ type AIReplyLabelResponse struct {
 
 // Create adds a new lead label and returns it.
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*LeadLabel, error) {
-	out := &LeadLabel{}
-	if err := s.client.Post(ctx, basePath, req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[LeadLabel](ctx, s.client, basePath, req)
 }
 
 // List returns a single page of lead labels filtered by the supplied options.
 func (s *Service) List(ctx context.Context, opts ...ListOption) (*ListResponse, error) {
-	q := instantly.NewQuery()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(q)
-		}
-	}
-
-	out := &ListResponse{}
-	if err := s.client.Get(ctx, q.Path(basePath), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[ListResponse](ctx, s.client, instantly.ApplyOptions(opts...).Path(basePath))
 }
 
 // Get returns a single lead label by its unique identifier.
 func (s *Service) Get(ctx context.Context, id string) (*LeadLabel, error) {
-	out := &LeadLabel{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[LeadLabel](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // Update patches a lead label and returns its updated state.
 func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*LeadLabel, error) {
-	out := &LeadLabel{}
-	if err := s.client.Patch(ctx, basePath+"/"+url.PathEscape(id), req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PatchResult[LeadLabel](ctx, s.client, instantly.JoinPath(basePath, id), req)
 }
 
 // Delete deletes a lead label and returns the label that was deleted.
 func (s *Service) Delete(ctx context.Context, id string) (*LeadLabel, error) {
-	out := &LeadLabel{}
-	if err := s.client.Delete(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.DeleteResult[LeadLabel](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // TestAIReplyLabel reports which label the AI reply classifier would assign to
 // the given reply text.
 func (s *Service) TestAIReplyLabel(ctx context.Context, req AIReplyLabelRequest) (*AIReplyLabelResponse, error) {
-	out := &AIReplyLabelResponse{}
-	if err := s.client.Post(ctx, basePath+"/ai-reply-label", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
-}
-
-// ListIter walks every page of List, yielding each label with a nil error, or a
-// nil *LeadLabel with the first error.
-func (s *Service) ListIter(ctx context.Context, opts ...ListOption) iter.Seq2[*LeadLabel, error] {
-	return instantly.Iterate(ctx, func(ctx context.Context, cursor string) ([]LeadLabel, string, error) {
-		pageOpts := opts
-		if cursor != "" {
-			pageOpts = append(append([]ListOption(nil), opts...), WithStartingAfter(cursor))
-		}
-
-		page, err := s.List(ctx, pageOpts...)
-		if err != nil {
-			return nil, "", err
-		}
-
-		return page.Items, page.NextStartingAfter, nil
-	})
+	return instantly.PostResult[AIReplyLabelResponse](ctx, s.client, basePath+"/ai-reply-label", req)
 }
