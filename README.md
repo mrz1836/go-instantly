@@ -200,10 +200,11 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**105 / 171 operations · 13 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+**117 / 171 operations · 15 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
 Campaign, Lead, Lead List, Lead Label, Campaign Subsequence, Email Verification, Inbox Placement Test,
-Inbox Placement Analytics, Inbox Placement Report, SuperSearch Enrichment); every remaining resource is
-listed below with a link to its reference docs and its operation count, so you can see exactly what is left.
+Inbox Placement Analytics, Inbox Placement Report, SuperSearch Enrichment, Webhook, Webhook Event); every
+remaining resource is listed below with a link to its reference docs and its operation count, so you can
+see exactly what is left.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
 	* [x] [`POST /api/v2/emails/test`](email/email.go) - Send a test email (`email.Service.SendTest`)
@@ -323,18 +324,30 @@ listed below with a link to its reference docs and its operation count, so you c
 	* [x] `POST /api/v2/supersearch-enrichment/enrich-leads-from-supersearch` - Enrich leads (`supersearch.Service.EnrichLeads`)
 	* [x] `POST /api/v2/supersearch-enrichment/signal-keywords-facet` - Facet signal keywords (`supersearch.Service.SignalKeywords`)
 	* [x] `GET /api/v2/supersearch-enrichment/history/{resource_id}` - Enrichment history (`supersearch.Service.History`)
+* [x] **[Webhook API](https://developer.instantly.ai/api-reference/webhook) — ([`webhook/`](webhook/webhook.go))**
+	* [x] `POST /api/v2/webhooks` - Create webhook (`webhook.Service.Create`)
+	* [x] `GET /api/v2/webhooks` - List webhooks (`webhook.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/webhooks/{id}` - Get webhook (`webhook.Service.Get`)
+	* [x] `PATCH /api/v2/webhooks/{id}` - Patch webhook (`webhook.Service.Update`)
+	* [x] `DELETE /api/v2/webhooks/{id}` - Delete webhook (`webhook.Service.Delete`)
+	* [x] `GET /api/v2/webhooks/event-types` - List event types (`webhook.Service.EventTypes`)
+	* [x] `POST /api/v2/webhooks/{id}/test` - Send a test delivery (`webhook.Service.Test`)
+	* [x] `POST /api/v2/webhooks/{id}/resume` - Resume a disabled webhook (`webhook.Service.Resume`)
+* [x] **[Webhook Event API](https://developer.instantly.ai/api-reference/webhookevent) — ([`webhookevent/`](webhookevent/webhookevent.go))**
+	* [x] `GET /api/v2/webhook-events` - List events (`webhookevent.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/webhook-events/{id}` - Get event (`webhookevent.Service.Get`)
+	* [x] `GET /api/v2/webhook-events/summary` - Overview summary (`webhookevent.Service.Summary`)
+	* [x] `GET /api/v2/webhook-events/summary-by-date` - Summary by date (`webhookevent.Service.SummaryByDate`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
 
 * [ ] **[BlockListEntry](https://developer.instantly.ai/api-reference/blocklistentry)** - 9 operations
-* [ ] **[Webhook](https://developer.instantly.ai/api-reference/webhook)** - 8 operations
 * [ ] **[Workspace](https://developer.instantly.ai/api-reference/workspace)** - 8 operations
 * [ ] **[DFYEmailAccountOrder](https://developer.instantly.ai/api-reference/dfyemailaccountorder)** - 7 operations
 * [ ] **[CustomTag](https://developer.instantly.ai/api-reference/customtag)** - 6 operations
 * [ ] **[WorkspaceGroupMember](https://developer.instantly.ai/api-reference/workspacegroupmember)** - 5 operations
 * [ ] **[WorkspaceMember](https://developer.instantly.ai/api-reference/workspacemember)** - 5 operations
-* [ ] **[WebhookEvent](https://developer.instantly.ai/api-reference/webhookevent)** - 4 operations
 * [ ] **[APIKey](https://developer.instantly.ai/api-reference/apikey)** - 3 operations
 * [ ] **[OAuth](https://developer.instantly.ai/api-reference/oauth)** - 3 operations
 * [ ] **[BackgroundJob](https://developer.instantly.ai/api-reference/backgroundjob)** - 2 operations

@@ -25,6 +25,8 @@ import (
 	"github.com/mrz1836/go-instantly/inboxanalytics"
 	"github.com/mrz1836/go-instantly/inboxtest"
 	"github.com/mrz1836/go-instantly/supersearch"
+	"github.com/mrz1836/go-instantly/webhook"
+	"github.com/mrz1836/go-instantly/webhookevent"
 )
 
 func main() {
@@ -50,6 +52,8 @@ func main() {
 	inboxTests := inboxtest.New(client)
 	inboxAnalytics := inboxanalytics.New(client)
 	enrichment := supersearch.New(client)
+	webhooks := webhook.New(client)
+	webhookEvents := webhookevent.New(client)
 
 	ctx := context.Background()
 
@@ -90,6 +94,10 @@ func main() {
 	}
 
 	if err := enrichLeads(ctx, enrichment); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := manageWebhooks(ctx, webhooks, webhookEvents); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -248,6 +256,54 @@ func enrichLeads(ctx context.Context, enrichment *supersearch.Service) error {
 	}
 
 	log.Printf("started enrichment %s", sanitize(enriched.ID))
+
+	return nil
+}
+
+// manageWebhooks creates a webhook, sends a test delivery, and reviews the
+// recent delivery events and their aggregate success rate.
+//
+// A webhook disabled by repeated delivery failures reads back with a Status of
+// StatusError; webhooks.Resume reactivates it. The custom headers a webhook
+// sends are a free-form map, passed as a json.RawMessage.
+func manageWebhooks(
+	ctx context.Context, webhooks *webhook.Service, events *webhookevent.Service,
+) error {
+	hook, err := webhooks.Create(ctx, webhook.CreateRequest{
+		TargetHookURL: "https://example.com/instantly-hook",
+		Name:          instantly.Ptr("Reply notifier"),
+		EventType:     webhook.EventReplyReceived,
+		Headers:       json.RawMessage(`{"Authorization":"Bearer [WEBHOOK-SECRET]"}`),
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("created webhook %s", sanitize(hook.ID))
+
+	// A test delivery reports the target's status without waiting for a real
+	// event to fire.
+	result, err := webhooks.Test(ctx, hook.ID)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("test delivery succeeded: %t", result.Success)
+
+	// Review the recent failed deliveries and the overall success rate.
+	failures, err := events.List(ctx, webhookevent.WithSuccess(false), webhookevent.WithLimit(20))
+	if err != nil {
+		return err
+	}
+
+	log.Printf("%d recent failed deliveries", len(failures.Items))
+
+	summary, err := events.Summary(ctx, "", "")
+	if err != nil {
+		return err
+	}
+
+	log.Printf("overall delivery success rate: %.1f%%", summary.SuccessRate*100)
 
 	return nil
 }
