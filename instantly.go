@@ -60,8 +60,6 @@ func (client *Client) patch(ctx context.Context, path string, payload, dst any) 
 
 // put performs a PUT request with the given payload and decodes the response
 // into dst.
-//
-//nolint:unused // verb helper kept complete for resources beyond the email tag
 func (client *Client) put(ctx context.Context, path string, payload, dst any) error {
 	return client.doRequest(ctx, http.MethodPut, path, payload, dst)
 }
