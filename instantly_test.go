@@ -3,6 +3,7 @@ package instantly
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,76 +20,129 @@ const (
 	// testAuthHeader is the exact Authorization header value the client must send.
 	testAuthHeader = "Bearer " + testAPIKey
 
-	// mediaTypeJSON is the media type used for both Accept and Content-Type.
-	mediaTypeJSON = "application/json"
-
 	// successBody is a minimal successful JSON response body.
 	successBody = `{"status":"success"}`
 )
 
-// InstantlyTestSuite bootstraps an in-process API server for the whole package.
+// clientTestSuite exercises the low-level client plumbing against a stdlib mux.
 //
-// Every test routes through the mock router rather than the live Instantly API:
-// no test in this repository is permitted to reach api.instantly.ai.
-type InstantlyTestSuite struct {
+// These tests stay in package instantly because they reach unexported client
+// fields and the unexported checkResponse path; they cannot import
+// internal/instantlytest, which imports instantly and would form a test cycle.
+type clientTestSuite struct {
 	suite.Suite
 
-	mux    *TestRouter
+	mux    *http.ServeMux
 	server *httptest.Server
 	client *Client
 }
 
-// SetupSuite starts the mock API server and points a client at it.
-func (s *InstantlyTestSuite) SetupSuite() {
-	s.mux = NewTestRouter()
+// SetupTest gives every test a fresh mux and server, so route registrations
+// never collide across tests.
+func (s *clientTestSuite) SetupTest() {
+	s.mux = http.NewServeMux()
 	s.server = httptest.NewServer(s.mux)
-
-	s.client = NewClient(testAPIKey)
-	s.client.BaseURL = s.server.URL
+	s.client = NewClient(testAPIKey, WithBaseURL(s.server.URL))
 }
 
-// TearDownSuite shuts the mock API server down.
-func (s *InstantlyTestSuite) TearDownSuite() {
+// TearDownTest shuts the per-test server down.
+func (s *clientTestSuite) TearDownTest() {
 	if s.server != nil {
 		s.server.Close()
 	}
 }
 
-// TestInstantlySuite runs the package suite.
-func TestInstantlySuite(t *testing.T) {
-	suite.Run(t, new(InstantlyTestSuite))
+// TestClientSuite runs the client plumbing suite.
+func TestClientSuite(t *testing.T) {
+	suite.Run(t, new(clientTestSuite))
 }
 
-// TestNewClient verifies the constructor defaults.
-func (s *InstantlyTestSuite) TestNewClient() {
+// TestNewClientDefaults verifies the constructor defaults.
+func (s *clientTestSuite) TestNewClientDefaults() {
 	client := NewClient("some-key")
 
 	s.Require().NotNil(client)
-	s.Equal("some-key", client.APIKey)
-	s.Equal(defaultBaseURL, client.BaseURL)
-	s.NotNil(client.HTTPClient)
+	s.Equal("some-key", client.apiKey)
+	s.Equal(defaultBaseURL, client.baseURL)
+	s.NotNil(client.httpClient)
+	s.Empty(client.userAgent)
+	s.Nil(client.headers)
 }
 
-// TestRequestHeaders verifies the bearer token and JSON headers are always sent.
-func (s *InstantlyTestSuite) TestRequestHeaders() {
-	s.mux.Get("/api/v2/headers", func(w http.ResponseWriter, req *http.Request) {
+// TestNewClientOptions verifies each functional option is applied, and that a
+// nil option is ignored rather than panicking.
+func (s *clientTestSuite) TestNewClientOptions() {
+	custom := &http.Client{}
+	client := NewClient(
+		"some-key",
+		nil,
+		WithHTTPClient(custom),
+		WithBaseURL("https://example.test"),
+		WithUserAgent("go-instantly/test"),
+		WithHTTPHeader("X-Trace", "abc"),
+		WithHTTPHeader("X-Trace", "def"),
+	)
+
+	s.Same(custom, client.httpClient)
+	s.Equal("https://example.test", client.baseURL)
+	s.Equal("go-instantly/test", client.userAgent)
+	s.Equal([]string{"abc", "def"}, client.headers.Values("X-Trace"))
+}
+
+// TestPtr verifies the pointer helper returns a pointer to its argument.
+func (s *clientTestSuite) TestPtr() {
+	s.True(*Ptr(true))
+	s.Equal("x", *Ptr("x"))
+	s.Equal(7, *Ptr(7))
+}
+
+// TestRequestHeaders verifies the bearer token and JSON headers are always sent,
+// along with a configured user agent and extra header.
+func (s *clientTestSuite) TestRequestHeaders() {
+	s.handle(http.MethodGet, "/api/v2/headers", func(w http.ResponseWriter, req *http.Request) {
 		s.Equal(testAuthHeader, req.Header.Get("Authorization"))
 		s.Equal("application/json", req.Header.Get("Accept"))
 		s.Equal("application/json", req.Header.Get("Content-Type"))
+		s.Equal("go-instantly/test", req.Header.Get("User-Agent"))
+		s.Equal("abc", req.Header.Get("X-Trace"))
 		_, _ = w.Write([]byte(successBody))
 	})
 
+	client := NewClient(
+		testAPIKey,
+		WithBaseURL(s.server.URL),
+		WithUserAgent("go-instantly/test"),
+		WithHTTPHeader("X-Trace", "abc"),
+	)
+
 	var result map[string]string
-	err := s.client.get(context.Background(), "/api/v2/headers", &result)
+	err := client.Get(context.Background(), "/api/v2/headers", &result)
 
 	s.Require().NoError(err)
 	s.Equal("success", result["status"])
 }
 
+// TestExtraHeaderCannotOverrideMandatory verifies a caller-supplied header does
+// not clobber the Authorization the client must send.
+func (s *clientTestSuite) TestExtraHeaderCannotOverrideMandatory() {
+	s.handle(http.MethodGet, "/api/v2/protected", func(w http.ResponseWriter, req *http.Request) {
+		s.Equal(testAuthHeader, req.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(successBody))
+	})
+
+	client := NewClient(
+		testAPIKey,
+		WithBaseURL(s.server.URL),
+		WithHTTPHeader("Authorization", "Bearer forged"),
+	)
+
+	s.Require().NoError(client.Get(context.Background(), "/api/v2/protected", nil))
+}
+
 // TestPayloadRoundTrip verifies a request body reaches the server intact and the
 // response decodes into the destination.
-func (s *InstantlyTestSuite) TestPayloadRoundTrip() {
-	s.mux.Post("/api/v2/echo", func(w http.ResponseWriter, req *http.Request) {
+func (s *clientTestSuite) TestPayloadRoundTrip() {
+	s.handle(http.MethodPost, "/api/v2/echo", func(w http.ResponseWriter, req *http.Request) {
 		var received map[string]string
 		s.NoError(json.NewDecoder(req.Body).Decode(&received))
 		s.Equal("hello", received["subject"])
@@ -96,7 +150,7 @@ func (s *InstantlyTestSuite) TestPayloadRoundTrip() {
 	})
 
 	var result map[string]string
-	err := s.client.post(
+	err := s.client.Post(
 		context.Background(), "/api/v2/echo", map[string]string{"subject": "hello"}, &result,
 	)
 
@@ -104,8 +158,8 @@ func (s *InstantlyTestSuite) TestPayloadRoundTrip() {
 	s.Equal("abc", result["id"])
 }
 
-// TestVerbHelpers exercises every private verb helper against the mock router.
-func (s *InstantlyTestSuite) TestVerbHelpers() {
+// TestVerbHelpers exercises every exported verb helper against the mux.
+func (s *clientTestSuite) TestVerbHelpers() {
 	const path = "/api/v2/verbs"
 
 	handler := func(expected string) http.HandlerFunc {
@@ -115,39 +169,84 @@ func (s *InstantlyTestSuite) TestVerbHelpers() {
 		}
 	}
 
-	s.mux.Get(path, handler(http.MethodGet))
-	s.mux.Post(path, handler(http.MethodPost))
-	s.mux.Patch(path, handler(http.MethodPatch))
-	s.mux.Put(path, handler(http.MethodPut))
-	s.mux.Delete(path, handler(http.MethodDelete))
+	s.handle(http.MethodGet, path, handler(http.MethodGet))
+	s.handle(http.MethodPost, path, handler(http.MethodPost))
+	s.handle(http.MethodPatch, path, handler(http.MethodPatch))
+	s.handle(http.MethodPut, path, handler(http.MethodPut))
+	s.handle(http.MethodDelete, path, handler(http.MethodDelete))
 
 	ctx := context.Background()
 	payload := map[string]string{"field": "value"}
 
 	var result map[string]string
-	s.Require().NoError(s.client.get(ctx, path, &result))
-	s.Require().NoError(s.client.post(ctx, path, payload, &result))
-	s.Require().NoError(s.client.patch(ctx, path, payload, &result))
-	s.Require().NoError(s.client.put(ctx, path, payload, &result))
-	s.Require().NoError(s.client.delete(ctx, path, &result))
+	s.Require().NoError(s.client.Get(ctx, path, &result))
+	s.Require().NoError(s.client.Post(ctx, path, payload, &result))
+	s.Require().NoError(s.client.Patch(ctx, path, payload, &result))
+	s.Require().NoError(s.client.Put(ctx, path, payload, &result))
+	s.Require().NoError(s.client.Delete(ctx, path, &result))
 	s.Equal("success", result["status"])
+}
+
+// TestDoRaw verifies the raw body is returned undecoded for endpoints that
+// answer with a non-JSON payload.
+func (s *clientTestSuite) TestDoRaw() {
+	s.handle(http.MethodGet, "/api/v2/download", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("col1,col2\r\na,b\r\n"))
+	})
+
+	body, err := s.client.DoRaw(context.Background(), http.MethodGet, "/api/v2/download", nil)
+
+	s.Require().NoError(err)
+	s.Equal("col1,col2\r\na,b\r\n", string(body))
+}
+
+// TestDoRawSurfacesErrors verifies DoRaw runs the same error handling as Do.
+func (s *clientTestSuite) TestDoRawSurfacesErrors() {
+	s.handle(http.MethodGet, "/api/v2/download-fail", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"statusCode":404,"error":"Not Found"}`))
+	})
+
+	body, err := s.client.DoRaw(context.Background(), http.MethodGet, "/api/v2/download-fail", nil)
+
+	s.Require().Error(err)
+	s.Nil(body, "a failed raw request must not hand back a body")
+
+	var apiErr *APIError
+	s.Require().ErrorAs(err, &apiErr)
+	s.Equal(int64(http.StatusNotFound), apiErr.StatusCode)
+}
+
+// TestDeleteWithBody verifies Do can carry a payload on a DELETE, which a few
+// endpoints require.
+func (s *clientTestSuite) TestDeleteWithBody() {
+	s.handle(http.MethodDelete, "/api/v2/bulk", func(w http.ResponseWriter, req *http.Request) {
+		var received map[string][]string
+		s.NoError(json.NewDecoder(req.Body).Decode(&received))
+		s.Equal([]string{"a", "b"}, received["ids"])
+		_, _ = w.Write([]byte(successBody))
+	})
+
+	err := s.client.Do(
+		context.Background(), http.MethodDelete, "/api/v2/bulk", map[string][]string{"ids": {"a", "b"}}, nil,
+	)
+
+	s.Require().NoError(err)
 }
 
 // TestRequestGetBodyIsReplayable verifies the payload can be replayed on a
 // redirect or retry, and that a bodyless request carries no replay function.
-func (s *InstantlyTestSuite) TestRequestGetBodyIsReplayable() {
+func (s *clientTestSuite) TestRequestGetBodyIsReplayable() {
 	var captured *http.Request
 
-	client := NewClient(testAPIKey)
-	client.BaseURL = s.server.URL
-	client.HTTPClient = &http.Client{Transport: roundTripFunc(
+	client := NewClient(testAPIKey, WithHTTPClient(&http.Client{Transport: roundTripFunc(
 		func(req *http.Request) (*http.Response, error) {
 			captured = req
 			return jsonResponse(http.StatusOK, successBody), nil
 		},
-	)}
+	)}))
 
-	err := client.post(
+	err := client.Post(
 		context.Background(), "/api/v2/replay", map[string]string{"subject": "hello"}, nil,
 	)
 	s.Require().NoError(err)
@@ -162,19 +261,19 @@ func (s *InstantlyTestSuite) TestRequestGetBodyIsReplayable() {
 	s.JSONEq(`{"subject":"hello"}`, string(body))
 
 	captured = nil
-	s.Require().NoError(client.get(context.Background(), "/api/v2/replay", nil))
+	s.Require().NoError(client.Get(context.Background(), "/api/v2/replay", nil))
 	s.Require().NotNil(captured)
 	s.Nil(captured.GetBody)
 }
 
-// TestDefaultBaseURL verifies an empty BaseURL falls back to the documented API
+// TestDefaultBaseURL verifies an empty baseURL falls back to the documented API
 // host. The transport is intercepted, so no live request is ever made.
-func (s *InstantlyTestSuite) TestDefaultBaseURL() {
+func (s *clientTestSuite) TestDefaultBaseURL() {
 	var requestURL string
 
 	client := &Client{
-		APIKey: testAPIKey,
-		HTTPClient: &http.Client{Transport: roundTripFunc(
+		apiKey: testAPIKey,
+		httpClient: &http.Client{Transport: roundTripFunc(
 			func(req *http.Request) (*http.Response, error) {
 				requestURL = req.URL.String()
 				return jsonResponse(http.StatusOK, successBody), nil
@@ -182,21 +281,21 @@ func (s *InstantlyTestSuite) TestDefaultBaseURL() {
 		)},
 	}
 
-	s.Require().NoError(client.get(context.Background(), "/api/v2/emails", nil))
+	s.Require().NoError(client.Get(context.Background(), "/api/v2/emails", nil))
 	s.Equal(defaultBaseURL+"/api/v2/emails", requestURL)
 }
 
-// TestNilHTTPClientFallback verifies a zero-value HTTPClient still performs the
-// request through the default HTTP client.
-func (s *InstantlyTestSuite) TestNilHTTPClientFallback() {
-	s.mux.Get("/api/v2/no-http-client", func(w http.ResponseWriter, _ *http.Request) {
+// TestNilHTTPClientFallback verifies a nil httpClient still performs the request
+// through the default HTTP client.
+func (s *clientTestSuite) TestNilHTTPClientFallback() {
+	s.handle(http.MethodGet, "/api/v2/no-http-client", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(successBody))
 	})
 
-	client := &Client{APIKey: testAPIKey, BaseURL: s.server.URL}
+	client := &Client{apiKey: testAPIKey, baseURL: s.server.URL}
 
 	var result map[string]string
-	err := client.get(context.Background(), "/api/v2/no-http-client", &result)
+	err := client.Get(context.Background(), "/api/v2/no-http-client", &result)
 
 	s.Require().NoError(err)
 	s.Equal("success", result["status"])
@@ -204,22 +303,22 @@ func (s *InstantlyTestSuite) TestNilHTTPClientFallback() {
 
 // TestNilDestination verifies a response is discarded when no destination is
 // supplied, which is how the write-only endpoints call through.
-func (s *InstantlyTestSuite) TestNilDestination() {
-	s.mux.Get("/api/v2/nil-dst", func(w http.ResponseWriter, _ *http.Request) {
+func (s *clientTestSuite) TestNilDestination() {
+	s.handle(http.MethodGet, "/api/v2/nil-dst", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(successBody))
 	})
 
-	err := s.client.get(context.Background(), "/api/v2/nil-dst", nil)
+	err := s.client.Get(context.Background(), "/api/v2/nil-dst", nil)
 	s.Require().NoError(err)
 }
 
 // TestContextCancellation verifies a canceled context aborts the request.
-func (s *InstantlyTestSuite) TestContextCancellation() {
+func (s *clientTestSuite) TestContextCancellation() {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	var result map[string]string
-	err := s.client.get(ctx, "/api/v2/canceled", &result)
+	err := s.client.Get(ctx, "/api/v2/canceled", &result)
 
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, context.Canceled)
@@ -227,88 +326,84 @@ func (s *InstantlyTestSuite) TestContextCancellation() {
 
 // TestPayloadMarshalError verifies an unencodable payload fails before any
 // request is made.
-func (s *InstantlyTestSuite) TestPayloadMarshalError() {
-	err := s.client.post(context.Background(), "/api/v2/marshal", make(chan int), nil)
+func (s *clientTestSuite) TestPayloadMarshalError() {
+	err := s.client.Post(context.Background(), "/api/v2/marshal", make(chan int), nil)
 
 	s.Require().Error(err)
 	s.Require().ErrorContains(err, "failed to encode request payload")
 }
 
 // TestInvalidURL verifies an unusable base URL surfaces as an error.
-func (s *InstantlyTestSuite) TestInvalidURL() {
-	client := NewClient(testAPIKey)
-	client.BaseURL = "ht!tp://invalid url with spaces"
+func (s *clientTestSuite) TestInvalidURL() {
+	client := NewClient(testAPIKey, WithBaseURL("ht!tp://invalid url with spaces"))
 
-	err := client.get(context.Background(), "/api/v2/emails", nil)
+	err := client.Get(context.Background(), "/api/v2/emails", nil)
 	s.Require().Error(err)
 }
 
 // TestTransportError verifies a connection failure is returned to the caller.
-func (s *InstantlyTestSuite) TestTransportError() {
+func (s *clientTestSuite) TestTransportError() {
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closedURL := closed.URL
 	closed.Close()
 
-	client := NewClient(testAPIKey)
-	client.BaseURL = closedURL
+	client := NewClient(testAPIKey, WithBaseURL(closedURL))
 
-	err := client.get(context.Background(), "/api/v2/emails", nil)
+	err := client.Get(context.Background(), "/api/v2/emails", nil)
 	s.Require().Error(err)
 }
 
 // TestResponseDecodeError verifies a malformed success body is reported rather
 // than silently ignored.
-func (s *InstantlyTestSuite) TestResponseDecodeError() {
-	s.mux.Get("/api/v2/bad-json", func(w http.ResponseWriter, _ *http.Request) {
+func (s *clientTestSuite) TestResponseDecodeError() {
+	s.handle(http.MethodGet, "/api/v2/bad-json", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`not json at all`))
 	})
 
 	var result map[string]string
-	err := s.client.get(context.Background(), "/api/v2/bad-json", &result)
+	err := s.client.Get(context.Background(), "/api/v2/bad-json", &result)
 
 	s.Require().Error(err)
 	s.Require().ErrorContains(err, "failed to decode response with status 200")
 }
 
-// TestRouterPathParameters verifies the mock router extracts :param segments.
-func (s *InstantlyTestSuite) TestRouterPathParameters() {
-	s.mux.Get("/api/v2/emails/:id/detail", func(w http.ResponseWriter, req *http.Request) {
-		s.Equal("email-123", GetPathParam(req, "id"))
-		s.Empty(GetPathParam(req, "missing"))
-		_, _ = w.Write([]byte(successBody))
-	})
-
-	err := s.client.get(context.Background(), "/api/v2/emails/email-123/detail", nil)
-	s.Require().NoError(err)
-}
-
-// TestRouterReplacesDuplicateRoutes verifies re-registering a method and pattern
-// replaces the previous handler instead of shadowing it.
-func (s *InstantlyTestSuite) TestRouterReplacesDuplicateRoutes() {
-	const path = "/api/v2/replaced"
-
-	s.mux.Get(path, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"status":"first"}`))
-	})
-	s.mux.Get(path, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"status":"second"}`))
-	})
+// TestResponseBodyReadError verifies a body that fails mid-read surfaces the
+// read error rather than being silently treated as an empty response.
+func (s *clientTestSuite) TestResponseBodyReadError() {
+	client := NewClient(testAPIKey, WithHTTPClient(&http.Client{Transport: roundTripFunc(
+		func(_ *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     http.StatusText(http.StatusOK),
+				Header:     http.Header{"Content-Type": []string{mediaTypeJSON}},
+				Body:       io.NopCloser(errReader{}),
+			}, nil
+		},
+	)}))
 
 	var result map[string]string
-	err := s.client.get(context.Background(), path, &result)
-
-	s.Require().NoError(err)
-	s.Equal("second", result["status"])
-}
-
-// TestRouterUnknownRouteIsNotFound verifies unregistered paths fall through to a
-// 404, which the client reports as an error.
-func (s *InstantlyTestSuite) TestRouterUnknownRouteIsNotFound() {
-	err := s.client.get(context.Background(), "/api/v2/never-registered", nil)
+	err := client.Get(context.Background(), "/api/v2/read-error", &result)
 
 	s.Require().Error(err)
-	s.Require().ErrorContains(err, "404")
+	s.Require().ErrorContains(err, "unexpected read failure")
 }
+
+// handle registers a handler for a "METHOD /path" pattern.
+func (s *clientTestSuite) handle(method, path string, handler http.HandlerFunc) {
+	s.mux.HandleFunc(method+" "+path, handler)
+}
+
+// errReader is an io.Reader that always fails, used to exercise the body-read
+// error path.
+type errReader struct{}
+
+// Read always returns an error.
+func (errReader) Read([]byte) (int, error) {
+	return 0, errUnexpectedRead
+}
+
+// errUnexpectedRead is the failure errReader returns.
+var errUnexpectedRead = errors.New("unexpected read failure")
 
 // roundTripFunc adapts a function to http.RoundTripper so transport-level
 // details can be asserted without a network round trip.

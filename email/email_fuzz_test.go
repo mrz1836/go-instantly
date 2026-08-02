@@ -1,23 +1,36 @@
-package instantly
+package email_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mrz1836/go-instantly"
+	"github.com/mrz1836/go-instantly/email"
+	"github.com/mrz1836/go-instantly/internal/instantlytest"
 )
 
 // fuzzEmailRequest carries the fuzzed field values for the email request types.
-// It is declared with explicit JSON tags so it round trips under the same rules
-// as the exported request bodies.
 type fuzzEmailRequest struct {
 	EAccount           string `json:"eaccount"`
 	ToAddressEmailList string `json:"to_address_email_list"`
 	Subject            string `json:"subject"`
 	HTML               string `json:"html"`
+}
+
+// fuzzClient returns a client whose transport answers every request with the
+// given status and body, so no fuzz input ever reaches a network.
+func fuzzClient(statusCode int, body string) *instantly.Client {
+	return instantly.NewClient(instantlytest.APIKey, instantly.WithHTTPClient(
+		&http.Client{Transport: instantlytest.RoundTripFunc(
+			func(_ *http.Request) (*http.Response, error) {
+				return instantlytest.JSONResponse(statusCode, body), nil
+			},
+		)},
+	))
 }
 
 // FuzzEmailSerialization round trips arbitrary field values through every email
@@ -29,23 +42,25 @@ func FuzzEmailSerialization(f *testing.F) {
 	f.Add("sender@example.com", "lead@example.com", "Ünïcödé ✉", "<p>Héllo</p>")
 	f.Add("sender@example.com", "lead@example.com", "line\r\nbreak", "<p>\x00</p>")
 
-	f.Fuzz(func(t *testing.T, eaccount, recipients, subject, html string) {
+	f.Fuzz(func(t *testing.T, eaccount, recipients, subj, html string) {
 		fuzzed := fuzzEmailRequest{
 			EAccount:           eaccount,
 			ToAddressEmailList: recipients,
-			Subject:            subject,
+			Subject:            subj,
 			HTML:               html,
 		}
 
 		// Encoding coerces invalid UTF-8 to the replacement character, so exact
 		// equality is only asserted for input the encoder can represent.
 		lossless := utf8.ValidString(eaccount) && utf8.ValidString(recipients) &&
-			utf8.ValidString(subject) && utf8.ValidString(html)
+			utf8.ValidString(subj) && utf8.ValidString(html)
 
-		requireStableRoundTrip(t, sendTestRequest(fuzzed), lossless)
-		requireStableRoundTrip(t, replyRequest(fuzzed), lossless)
-		requireStableRoundTrip(t, forwardRequest(fuzzed), lossless)
-		requireStableRoundTrip(t, UpdateEmailRequest{IsUnread: ptrTo(true), ReminderTS: &subject}, lossless)
+		instantlytest.RequireStableRoundTrip(t, sendTestRequest(fuzzed), lossless)
+		instantlytest.RequireStableRoundTrip(t, replyRequest(fuzzed), lossless)
+		instantlytest.RequireStableRoundTrip(t, forwardRequest(fuzzed), lossless)
+		instantlytest.RequireStableRoundTrip(
+			t, email.UpdateRequest{IsUnread: instantly.Ptr(true), ReminderTS: &subj}, lossless,
+		)
 	})
 }
 
@@ -67,84 +82,64 @@ func FuzzEmailResponseDecoding(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, body string) {
 		ctx := context.Background()
-		client := fuzzClient(http.StatusOK, body)
+		svc := email.New(fuzzClient(http.StatusOK, body))
 
-		email, err := client.GetEmail(ctx, testEmailID)
+		got, err := svc.Get(ctx, emailID)
 		if err != nil {
-			require.Nil(t, email, "a decode failure must never hand back a partly populated email")
+			require.Nil(t, got, "a decode failure must never hand back a partly populated email")
 		} else {
-			require.NotNil(t, email)
+			require.NotNil(t, got)
 		}
 
-		page, err := client.ListEmails(ctx)
+		page, err := svc.List(ctx)
 		if err != nil {
 			require.Nil(t, page, "a decode failure must never hand back a partly populated page")
 		} else {
 			require.NotNil(t, page)
 		}
 
-		count, err := client.CountUnreadEmails(ctx)
+		count, err := svc.CountUnread(ctx)
 		if err != nil {
 			require.Zero(t, count, "a failed count must not report a number the API never sent")
 		}
 
 		// The write endpoints decode the same bodies and must survive them too.
 		require.NotPanics(t, func() {
-			_ = client.SendTestEmail(ctx, SendTestEmailRequest{EAccount: testEAccount})
-			_ = client.MarkThreadAsRead(ctx, testThreadID)
+			_ = svc.SendTest(ctx, email.SendTestRequest{EAccount: eAccount})
+			_ = svc.MarkThreadAsRead(ctx, threadID)
 		})
 	})
 }
 
-// requireStableRoundTrip asserts a request body survives encoding and decoding
-// unchanged, and that a second encoding produces the same bytes.
-func requireStableRoundTrip[T any](t *testing.T, request T, lossless bool) {
-	t.Helper()
-
-	encoded, err := json.Marshal(request)
-	require.NoError(t, err)
-
-	var decoded T
-	require.NoError(t, json.Unmarshal(encoded, &decoded))
-
-	reencoded, err := json.Marshal(decoded)
-	require.NoError(t, err)
-	require.JSONEq(t, string(encoded), string(reencoded), "a decoded body must re-encode identically")
-
-	if lossless {
-		require.Equal(t, request, decoded)
-	}
-}
-
 // sendTestRequest builds a send-test-email body from the fuzzed values.
-func sendTestRequest(fuzzed fuzzEmailRequest) SendTestEmailRequest {
-	return SendTestEmailRequest{
+func sendTestRequest(fuzzed fuzzEmailRequest) email.SendTestRequest {
+	return email.SendTestRequest{
 		EAccount:           fuzzed.EAccount,
 		ToAddressEmailList: fuzzed.ToAddressEmailList,
 		Subject:            fuzzed.Subject,
-		Body:               EmailBody{HTML: fuzzed.HTML},
+		Body:               email.Body{HTML: fuzzed.HTML},
 	}
 }
 
 // replyRequest builds a reply body from the fuzzed values.
-func replyRequest(fuzzed fuzzEmailRequest) ReplyToEmailRequest {
-	return ReplyToEmailRequest{
+func replyRequest(fuzzed fuzzEmailRequest) email.ReplyRequest {
+	return email.ReplyRequest{
 		ReplyToUUID:          fuzzed.EAccount,
 		EAccount:             fuzzed.EAccount,
 		Subject:              fuzzed.Subject,
-		Body:                 EmailBody{HTML: fuzzed.HTML},
+		Body:                 email.Body{HTML: fuzzed.HTML},
 		AdditionalRecipients: []string{fuzzed.ToAddressEmailList},
 		CCAddressEmailList:   fuzzed.ToAddressEmailList,
 	}
 }
 
 // forwardRequest builds a forward body from the fuzzed values.
-func forwardRequest(fuzzed fuzzEmailRequest) ForwardEmailRequest {
-	return ForwardEmailRequest{
+func forwardRequest(fuzzed fuzzEmailRequest) email.ForwardRequest {
+	return email.ForwardRequest{
 		ReplyToUUID:        fuzzed.EAccount,
 		ToAddressEmailList: fuzzed.ToAddressEmailList,
 		EAccount:           fuzzed.EAccount,
 		Subject:            fuzzed.Subject,
-		Body:               &EmailBody{HTML: fuzzed.HTML},
+		Body:               &email.Body{HTML: fuzzed.HTML},
 	}
 }

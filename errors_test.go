@@ -10,7 +10,7 @@ import (
 
 // TestAPIErrorStatusEnvelope verifies every documented 4xx envelope decodes into
 // an APIError carrying all three fields.
-func (s *InstantlyTestSuite) TestAPIErrorStatusEnvelope() {
+func (s *clientTestSuite) TestAPIErrorStatusEnvelope() {
 	tests := []struct {
 		name       string
 		statusCode int
@@ -30,13 +30,13 @@ func (s *InstantlyTestSuite) TestAPIErrorStatusEnvelope() {
 				`{"statusCode":%d,"error":%q,"message":%q}`, test.statusCode, test.code, test.message,
 			)
 
-			s.mux.Get(path, func(w http.ResponseWriter, _ *http.Request) {
+			s.handle(http.MethodGet, path, func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(test.statusCode)
 				_, _ = w.Write([]byte(body))
 			})
 
 			var result map[string]string
-			err := s.client.get(context.Background(), path, &result)
+			err := s.client.Get(context.Background(), path, &result)
 
 			s.Require().Error(err)
 
@@ -52,13 +52,13 @@ func (s *InstantlyTestSuite) TestAPIErrorStatusEnvelope() {
 
 // TestAPIErrorStatusCodeFallback verifies the transport status is used when the
 // error body omits it.
-func (s *InstantlyTestSuite) TestAPIErrorStatusCodeFallback() {
-	s.mux.Get("/api/v2/status-fallback", func(w http.ResponseWriter, _ *http.Request) {
+func (s *clientTestSuite) TestAPIErrorStatusCodeFallback() {
+	s.handle(http.MethodGet, "/api/v2/status-fallback", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"error":"Not Found","message":"no statusCode in this body"}`))
 	})
 
-	err := s.client.get(context.Background(), "/api/v2/status-fallback", nil)
+	err := s.client.Get(context.Background(), "/api/v2/status-fallback", nil)
 
 	s.Require().Error(err)
 
@@ -70,14 +70,14 @@ func (s *InstantlyTestSuite) TestAPIErrorStatusCodeFallback() {
 
 // TestAPIErrorNonJSONBody verifies a failure whose body is not the documented
 // envelope still returns an error naming the status code, never a nil error.
-func (s *InstantlyTestSuite) TestAPIErrorNonJSONBody() {
-	s.mux.Get("/api/v2/html-error", func(w http.ResponseWriter, _ *http.Request) {
+func (s *clientTestSuite) TestAPIErrorNonJSONBody() {
+	s.handle(http.MethodGet, "/api/v2/html-error", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = w.Write([]byte(`<html><body>502 Bad Gateway</body></html>`))
 	})
 
 	var result map[string]string
-	err := s.client.get(context.Background(), "/api/v2/html-error", &result)
+	err := s.client.Get(context.Background(), "/api/v2/html-error", &result)
 
 	s.Require().Error(err)
 	s.Require().ErrorContains(err, "request failed with status 502")
@@ -89,7 +89,7 @@ func (s *InstantlyTestSuite) TestAPIErrorNonJSONBody() {
 
 // TestAPIErrorInSuccessBody verifies an error code delivered inside an HTTP 200
 // body becomes a returned error and leaves the destination untouched.
-func (s *InstantlyTestSuite) TestAPIErrorInSuccessBody() {
+func (s *clientTestSuite) TestAPIErrorInSuccessBody() {
 	codes := []string{
 		ErrCodeAccountAuthError,
 		ErrCodeAccountNotFound,
@@ -100,7 +100,7 @@ func (s *InstantlyTestSuite) TestAPIErrorInSuccessBody() {
 		s.Run(code, func() {
 			path := "/api/v2/success-errors/" + code
 
-			s.mux.Post(path, func(w http.ResponseWriter, _ *http.Request) {
+			s.handle(http.MethodPost, path, func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				_, _ = fmt.Fprintf(w, `{"error":%q}`, code)
 			})
@@ -108,7 +108,7 @@ func (s *InstantlyTestSuite) TestAPIErrorInSuccessBody() {
 			var result struct {
 				Status string `json:"status"`
 			}
-			err := s.client.post(context.Background(), path, map[string]string{"eaccount": "a@b.com"}, &result)
+			err := s.client.Post(context.Background(), path, map[string]string{"eaccount": "a@b.com"}, &result)
 
 			s.Require().Error(err, "an error code at HTTP 200 must still be an error")
 
@@ -124,15 +124,15 @@ func (s *InstantlyTestSuite) TestAPIErrorInSuccessBody() {
 
 // TestAPIErrorSuccessBodyDecodes verifies a genuine success is not mistaken for
 // an error.
-func (s *InstantlyTestSuite) TestAPIErrorSuccessBodyDecodes() {
-	s.mux.Post("/api/v2/success-body", func(w http.ResponseWriter, _ *http.Request) {
+func (s *clientTestSuite) TestAPIErrorSuccessBodyDecodes() {
+	s.handle(http.MethodPost, "/api/v2/success-body", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(successBody))
 	})
 
 	var result struct {
 		Status string `json:"status"`
 	}
-	err := s.client.post(context.Background(), "/api/v2/success-body", map[string]string{"ok": "yes"}, &result)
+	err := s.client.Post(context.Background(), "/api/v2/success-body", map[string]string{"ok": "yes"}, &result)
 
 	s.Require().NoError(err)
 	s.Equal("success", result.Status)
@@ -140,13 +140,13 @@ func (s *InstantlyTestSuite) TestAPIErrorSuccessBodyDecodes() {
 
 // TestAPIErrorSuccessBodyWithoutErrorField verifies a success body that is not a
 // JSON object still decodes normally, since it carries no error field to find.
-func (s *InstantlyTestSuite) TestAPIErrorSuccessBodyWithoutErrorField() {
-	s.mux.Get("/api/v2/success-array", func(w http.ResponseWriter, _ *http.Request) {
+func (s *clientTestSuite) TestAPIErrorSuccessBodyWithoutErrorField() {
+	s.handle(http.MethodGet, "/api/v2/success-array", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`["one","two"]`))
 	})
 
 	var result []string
-	err := s.client.get(context.Background(), "/api/v2/success-array", &result)
+	err := s.client.Get(context.Background(), "/api/v2/success-array", &result)
 
 	s.Require().NoError(err)
 	s.Equal([]string{"one", "two"}, result)
@@ -154,13 +154,13 @@ func (s *InstantlyTestSuite) TestAPIErrorSuccessBodyWithoutErrorField() {
 
 // TestAPIErrorErrorsAsSupport verifies the exported contract using the exact
 // errors.As call shape a consumer of this library writes.
-func (s *InstantlyTestSuite) TestAPIErrorErrorsAsSupport() {
-	s.mux.Get("/api/v2/errors-as", func(w http.ResponseWriter, _ *http.Request) {
+func (s *clientTestSuite) TestAPIErrorErrorsAsSupport() {
+	s.handle(http.MethodGet, "/api/v2/errors-as", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"statusCode":401,"error":"Unauthorized","message":"Invalid API key"}`))
 	})
 
-	err := s.client.get(context.Background(), "/api/v2/errors-as", nil)
+	err := s.client.Get(context.Background(), "/api/v2/errors-as", nil)
 	s.Require().Error(err)
 
 	var apiErr *APIError
@@ -171,7 +171,7 @@ func (s *InstantlyTestSuite) TestAPIErrorErrorsAsSupport() {
 }
 
 // TestAPIErrorMessage verifies both wire shapes render readably.
-func (s *InstantlyTestSuite) TestAPIErrorMessage() {
+func (s *clientTestSuite) TestAPIErrorMessage() {
 	tests := []struct {
 		name     string
 		apiErr   *APIError

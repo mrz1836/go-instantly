@@ -201,9 +201,6 @@
                 "range-loops": true,
                 "simple": true
             },
-            "revive": {
-                "config": ".revive.toml"
-            },
             "unparam": {
                 "check-exported": false
             },

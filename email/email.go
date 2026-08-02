@@ -1,16 +1,31 @@
-package instantly
+package email
 
 import (
 	"context"
 	"encoding/json"
 	"net/url"
+
+	"github.com/mrz1836/go-instantly"
 )
 
-// EmailBody is the content of an email.
+// basePath is the root path of the Email API.
+const basePath = "/api/v2/emails"
+
+// Service provides access to the Instantly.ai V2 Email API.
+type Service struct {
+	client *instantly.Client
+}
+
+// New builds an Email API service from an Instantly client.
+func New(client *instantly.Client) *Service {
+	return &Service{client: client}
+}
+
+// Body is the content of an email.
 //
 // The API requires HTML when sending an email; Text carries the plain-text
 // alternative when one is present.
-type EmailBody struct {
+type Body struct {
 	// HTML is the HTML content of the email.
 	HTML string `json:"html"`
 
@@ -46,7 +61,7 @@ type Email struct {
 	ToAddressEmailList string `json:"to_address_email_list"`
 
 	// Body is the content of the email.
-	Body EmailBody `json:"body"`
+	Body Body `json:"body"`
 
 	// OrganizationID identifies the organization the email belongs to.
 	OrganizationID string `json:"organization_id"`
@@ -131,8 +146,8 @@ type Email struct {
 	AIAgentID *string `json:"ai_agent_id,omitempty"`
 }
 
-// EmailListResponse is a single page of emails.
-type EmailListResponse struct {
+// ListResponse is a single page of emails.
+type ListResponse struct {
 	// Items are the emails on this page.
 	Items []Email `json:"items"`
 
@@ -154,9 +169,9 @@ type MarkThreadReadResponse struct {
 	Success bool `json:"success"`
 }
 
-// SendTestEmailRequest is the body of a send-test-email request. Every field is
+// SendTestRequest is the body of a send-test-email request. Every field is
 // required by the API.
-type SendTestEmailRequest struct {
+type SendTestRequest struct {
 	// EAccount is the sending account the test email is sent from.
 	EAccount string `json:"eaccount"`
 
@@ -167,11 +182,11 @@ type SendTestEmailRequest struct {
 	Subject string `json:"subject"`
 
 	// Body is the content of the test email.
-	Body EmailBody `json:"body"`
+	Body Body `json:"body"`
 }
 
-// ReplyToEmailRequest is the body of a reply request.
-type ReplyToEmailRequest struct {
+// ReplyRequest is the body of a reply request.
+type ReplyRequest struct {
 	// ReplyToUUID identifies the email being replied to. Required.
 	ReplyToUUID string `json:"reply_to_uuid"`
 
@@ -182,7 +197,7 @@ type ReplyToEmailRequest struct {
 	Subject string `json:"subject"`
 
 	// Body is the content of the reply. Required.
-	Body EmailBody `json:"body"`
+	Body Body `json:"body"`
 
 	// AdditionalRecipients are extra addresses to include on the reply.
 	AdditionalRecipients []string `json:"additional_recipients,omitempty"`
@@ -200,8 +215,8 @@ type ReplyToEmailRequest struct {
 	AssignedTo string `json:"assigned_to,omitempty"`
 }
 
-// ForwardEmailRequest is the body of a forward request.
-type ForwardEmailRequest struct {
+// ForwardRequest is the body of a forward request.
+type ForwardRequest struct {
 	// ReplyToUUID identifies the email being forwarded. Required.
 	ReplyToUUID string `json:"reply_to_uuid"`
 
@@ -215,7 +230,7 @@ type ForwardEmailRequest struct {
 	Subject string `json:"subject"`
 
 	// Body is the content prepended to the forwarded email.
-	Body *EmailBody `json:"body,omitempty"`
+	Body *Body `json:"body,omitempty"`
 
 	// CCAddressEmailList is the comma-separated list of carbon-copy addresses.
 	CCAddressEmailList string `json:"cc_address_email_list,omitempty"`
@@ -238,9 +253,9 @@ type ForwardEmailRequest struct {
 	AssignedTo string `json:"assigned_to,omitempty"`
 }
 
-// UpdateEmailRequest is the body of a patch-email request. No field is
-// required; an omitted field leaves the current value unchanged.
-type UpdateEmailRequest struct {
+// UpdateRequest is the body of a patch-email request. No field is required; an
+// omitted field leaves the current value unchanged.
+type UpdateRequest struct {
 	// IsUnread marks the email as unread when true and as read when false.
 	IsUnread *bool `json:"is_unread,omitempty"`
 
@@ -248,13 +263,13 @@ type UpdateEmailRequest struct {
 	ReminderTS *string `json:"reminder_ts,omitempty"`
 }
 
-// SendTestEmail sends a test email from one of the workspace sending accounts.
+// SendTest sends a test email from one of the workspace sending accounts.
 //
 // The API reports a sending-account failure inside an otherwise successful HTTP
 // 200 body, so a nil return is the only signal of success. The failure code is
-// available on APIError:
+// available on instantly.APIError:
 //
-//	if err := client.SendTestEmail(ctx, req); err != nil {
+//	if err := svc.SendTest(ctx, req); err != nil {
 //		var apiErr *instantly.APIError
 //		if errors.As(err, &apiErr) && apiErr.Code == instantly.ErrCodeAccountAuthError {
 //			// the sending account failed to authenticate
@@ -264,94 +279,99 @@ type UpdateEmailRequest struct {
 // The endpoint is rate limited to 10 requests per minute per workspace.
 //
 // See https://developer.instantly.ai/api-reference/email/send-a-test-email
-func (client *Client) SendTestEmail(ctx context.Context, req SendTestEmailRequest) error {
-	return client.post(ctx, "/api/v2/emails/test", req, nil)
+func (s *Service) SendTest(ctx context.Context, req SendTestRequest) error {
+	return s.client.Post(ctx, basePath+"/test", req, nil)
 }
 
-// ListEmails returns a single page of emails filtered by the supplied options.
+// List returns a single page of emails filtered by the supplied options.
 //
 // Pagination is cursor based: pass the returned NextStartingAfter back as the
-// starting cursor to fetch the following page, which is empty once the last
-// page has been reached. The endpoint is rate limited to 20 requests per
-// minute.
-func (client *Client) ListEmails(ctx context.Context, opts ...EmailListOption) (*EmailListResponse, error) {
-	response := &EmailListResponse{}
-	path := buildURLWithQuery("/api/v2/emails", newEmailListQuery(opts...))
+// starting cursor (WithStartingAfter) to fetch the following page, which is
+// empty once the last page has been reached. The endpoint is rate limited to 20
+// requests per minute.
+func (s *Service) List(ctx context.Context, opts ...ListOption) (*ListResponse, error) {
+	q := instantly.NewQuery()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(q)
+		}
+	}
 
-	if err := client.get(ctx, path, response); err != nil {
+	out := &ListResponse{}
+	if err := s.client.Get(ctx, q.Path(basePath), out); err != nil {
 		return nil, err
 	}
 
-	return response, nil
+	return out, nil
 }
 
-// GetEmail returns a single email by its unique identifier.
-func (client *Client) GetEmail(ctx context.Context, id string) (*Email, error) {
-	email := &Email{}
-	if err := client.get(ctx, "/api/v2/emails/"+url.PathEscape(id), email); err != nil {
+// Get returns a single email by its unique identifier.
+func (s *Service) Get(ctx context.Context, id string) (*Email, error) {
+	out := &Email{}
+	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
 		return nil, err
 	}
 
-	return email, nil
+	return out, nil
 }
 
-// UpdateEmail patches an email and returns its updated state.
-func (client *Client) UpdateEmail(ctx context.Context, id string, req UpdateEmailRequest) (*Email, error) {
-	email := &Email{}
-	if err := client.patch(ctx, "/api/v2/emails/"+url.PathEscape(id), req, email); err != nil {
+// Update patches an email and returns its updated state.
+func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*Email, error) {
+	out := &Email{}
+	if err := s.client.Patch(ctx, basePath+"/"+url.PathEscape(id), req, out); err != nil {
 		return nil, err
 	}
 
-	return email, nil
+	return out, nil
 }
 
-// DeleteEmail deletes an email and returns the email that was deleted.
-func (client *Client) DeleteEmail(ctx context.Context, id string) (*Email, error) {
-	email := &Email{}
-	if err := client.delete(ctx, "/api/v2/emails/"+url.PathEscape(id), email); err != nil {
+// Delete deletes an email and returns the email that was deleted.
+func (s *Service) Delete(ctx context.Context, id string) (*Email, error) {
+	out := &Email{}
+	if err := s.client.Delete(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
 		return nil, err
 	}
 
-	return email, nil
+	return out, nil
 }
 
-// ReplyToEmail replies to an existing email and returns the reply that was sent.
-func (client *Client) ReplyToEmail(ctx context.Context, req ReplyToEmailRequest) (*Email, error) {
-	email := &Email{}
-	if err := client.post(ctx, "/api/v2/emails/reply", req, email); err != nil {
+// Reply replies to an existing email and returns the reply that was sent.
+func (s *Service) Reply(ctx context.Context, req ReplyRequest) (*Email, error) {
+	out := &Email{}
+	if err := s.client.Post(ctx, basePath+"/reply", req, out); err != nil {
 		return nil, err
 	}
 
-	return email, nil
+	return out, nil
 }
 
-// ForwardEmail forwards an existing email and returns the forward that was sent.
-func (client *Client) ForwardEmail(ctx context.Context, req ForwardEmailRequest) (*Email, error) {
-	email := &Email{}
-	if err := client.post(ctx, "/api/v2/emails/forward", req, email); err != nil {
+// Forward forwards an existing email and returns the forward that was sent.
+func (s *Service) Forward(ctx context.Context, req ForwardRequest) (*Email, error) {
+	out := &Email{}
+	if err := s.client.Post(ctx, basePath+"/forward", req, out); err != nil {
 		return nil, err
 	}
 
-	return email, nil
+	return out, nil
 }
 
-// CountUnreadEmails returns the number of unread emails in the workspace.
-func (client *Client) CountUnreadEmails(ctx context.Context) (int64, error) {
-	response := &UnreadCountResponse{}
-	if err := client.get(ctx, "/api/v2/emails/unread/count", response); err != nil {
+// CountUnread returns the number of unread emails in the workspace.
+func (s *Service) CountUnread(ctx context.Context) (int64, error) {
+	out := &UnreadCountResponse{}
+	if err := s.client.Get(ctx, basePath+"/unread/count", out); err != nil {
 		return 0, err
 	}
 
-	return response.Count, nil
+	return out.Count, nil
 }
 
 // MarkThreadAsRead marks every email in a thread as read.
 //
 // The API reports only a success flag, which carries no more information than a
 // nil error, so the response is decoded purely to validate its shape.
-func (client *Client) MarkThreadAsRead(ctx context.Context, threadID string) error {
-	response := &MarkThreadReadResponse{}
-	path := "/api/v2/emails/threads/" + url.PathEscape(threadID) + "/mark-as-read"
+func (s *Service) MarkThreadAsRead(ctx context.Context, threadID string) error {
+	out := &MarkThreadReadResponse{}
+	path := basePath + "/threads/" + url.PathEscape(threadID) + "/mark-as-read"
 
-	return client.post(ctx, path, nil, response)
+	return s.client.Post(ctx, path, nil, out)
 }

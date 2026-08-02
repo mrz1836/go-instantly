@@ -41,6 +41,9 @@ _testmain.go
 # Notes
 todo.md
 
+# Local API docs reference (untracked working copy of the Instantly V2 spec + docs)
+.instantly-docs/
+
 # Distribution
 dist
 
