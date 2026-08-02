@@ -25,7 +25,6 @@
        &nbsp;&nbsp;&nbsp;&nbsp; <code>Quality</code> &nbsp;&nbsp;
     </td>
     <td align="left">
-       <a href="https://goreportcard.com/report/github.com/mrz1836/go-instantly"><img src="https://goreportcard.com/badge/github.com/mrz1836/go-instantly?style=flat-square" alt="Go Report"></a>
        <a href="https://codecov.io/gh/mrz1836/go-instantly"><img src="https://codecov.io/gh/mrz1836/go-instantly/branch/master/graph/badge.svg?style=flat-square" alt="Coverage"></a>
     </td>
   </tr>
@@ -316,7 +315,7 @@ magex help
 </details>
 
 <details>
-<summary><strong>GitHub Workflows</strong></summary>
+<summary><strong><code>GitHub Workflows</code></strong></summary>
 <br/>
 
 All workflows are driven by modular configuration in [`.github/env/`](.github/env/README.md) — no YAML editing required.
