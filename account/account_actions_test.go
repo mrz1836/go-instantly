@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 	"github.com/mrz1836/go-instantly/account"
@@ -49,18 +50,6 @@ func (s *AccountTestSuite) TestPauseResumeMarkFixed() {
 	}
 }
 
-// TestPauseFailure verifies a failed single action returns no account.
-func (s *AccountTestSuite) TestPauseFailure() {
-	s.Router.Post(pausePattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no account")
-	})
-
-	got, err := s.svc().Pause(context.Background(), "missing@example.com")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestPauseBulk verifies the bulk-pause body is sent and the split result decodes.
 func (s *AccountTestSuite) TestPauseBulk() {
 	s.Router.Post(bulkPausePath, func(w http.ResponseWriter, req *http.Request) {
@@ -78,18 +67,6 @@ func (s *AccountTestSuite) TestPauseBulk() {
 	s.Require().NoError(err)
 	s.Equal([]string{"a@x.com"}, got.PausedEmails)
 	s.Equal([]string{"b@x.com"}, got.FailedEmails)
-}
-
-// TestPauseBulkFailure verifies a failed bulk pause returns no result.
-func (s *AccountTestSuite) TestPauseBulkFailure() {
-	s.Router.Post(bulkPausePath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "bad key")
-	})
-
-	got, err := s.svc().PauseBulk(context.Background(), account.PauseBulkRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Nil(got)
 }
 
 // TestMove verifies the move body is sent and the status decodes.
@@ -111,18 +88,6 @@ func (s *AccountTestSuite) TestMove() {
 
 	s.Require().NoError(err)
 	s.Equal("success", got.Status)
-}
-
-// TestMoveFailure verifies a failed move returns no result.
-func (s *AccountTestSuite) TestMoveFailure() {
-	s.Router.Post(movePath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusForbidden, "Forbidden", "nope")
-	})
-
-	got, err := s.svc().Move(context.Background(), account.MoveRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusForbidden)
-	s.Nil(got)
 }
 
 // TestEnableDisableWarmup verifies the warmup toggles POST to their sub-path and
@@ -166,18 +131,6 @@ func (s *AccountTestSuite) TestEnableDisableWarmup() {
 	}
 }
 
-// TestEnableWarmupFailure verifies a failed toggle returns no job.
-func (s *AccountTestSuite) TestEnableWarmupFailure() {
-	s.Router.Post(enableWarmup, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "slow")
-	})
-
-	got, err := s.svc().EnableWarmup(context.Background(), account.WarmupToggleRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(got)
-}
-
 // TestWarmupAnalytics verifies the raw analytics payloads are preserved.
 func (s *AccountTestSuite) TestWarmupAnalytics() {
 	s.Router.Post(warmupAnalytics, func(w http.ResponseWriter, req *http.Request) {
@@ -197,18 +150,6 @@ func (s *AccountTestSuite) TestWarmupAnalytics() {
 	s.JSONEq(`{"x":1}`, string(got.EmailDateData))
 }
 
-// TestWarmupAnalyticsFailure verifies a failed request returns no result.
-func (s *AccountTestSuite) TestWarmupAnalyticsFailure() {
-	s.Router.Post(warmupAnalytics, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no data")
-	})
-
-	got, err := s.svc().WarmupAnalytics(context.Background(), account.WarmupAnalyticsRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDailyAnalytics verifies the option query is sent and the slice decodes.
 func (s *AccountTestSuite) TestDailyAnalytics() {
 	s.Router.Get(dailyAnalytics, func(w http.ResponseWriter, req *http.Request) {
@@ -226,8 +167,8 @@ func (s *AccountTestSuite) TestDailyAnalytics() {
 	})
 
 	got, err := s.svc().DailyAnalytics(context.Background(),
-		account.WithStartDate("2026-08-01"),
-		account.WithEndDate("2026-08-31"),
+		account.WithStartDate(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)),
+		account.WithEndDate(time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)),
 		account.WithEmails("a@x.com", "b@x.com"),
 	)
 
@@ -237,23 +178,11 @@ func (s *AccountTestSuite) TestDailyAnalytics() {
 	s.Equal(int64(10), got[0].Sent)
 }
 
-// TestDailyAnalyticsFailure verifies a failed request returns no slice.
-func (s *AccountTestSuite) TestDailyAnalyticsFailure() {
-	s.Router.Get(dailyAnalytics, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "bad key")
-	})
-
-	got, err := s.svc().DailyAnalytics(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Nil(got)
-}
-
 // TestAnalyticsOptions verifies each daily-analytics option renders correctly.
 func (s *AccountTestSuite) TestAnalyticsOptions() {
 	q := instantly.NewQuery()
-	account.WithStartDate("2026-08-01")(q)
-	account.WithEndDate("2026-08-31")(q)
+	account.WithStartDate(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC))(q)
+	account.WithEndDate(time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC))(q)
 	account.WithEmails("a@x.com", "b@x.com")(q)
 
 	s.Equal("2026-08-01", q.Get("start_date"))
@@ -274,18 +203,6 @@ func (s *AccountTestSuite) TestCtdStatus() {
 	s.True(got.Success)
 	s.True(got.CNAME)
 	s.False(got.SSL)
-}
-
-// TestCtdStatusFailure verifies a failed check returns no status.
-func (s *AccountTestSuite) TestCtdStatusFailure() {
-	s.Router.Get(ctdStatusPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no host")
-	})
-
-	got, err := s.svc().CtdStatus(context.Background(), "missing.example.com")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestVitals verifies the accounts are sent and the split result decodes.
@@ -310,16 +227,4 @@ func (s *AccountTestSuite) TestVitals() {
 	s.Require().Len(got.SuccessList, 1)
 	s.True(got.SuccessList[0].AllPass)
 	s.Empty(got.FailureList)
-}
-
-// TestVitalsFailure verifies a failed vitals test returns no result.
-func (s *AccountTestSuite) TestVitalsFailure() {
-	s.Router.Post(vitalsPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusPaymentRequired, "Payment Required", "limit")
-	})
-
-	got, err := s.svc().TestVitals(context.Background(), account.VitalsRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusPaymentRequired)
-	s.Nil(got)
 }

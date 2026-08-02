@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync/atomic"
 
 	"github.com/mrz1836/go-instantly/account"
@@ -79,9 +78,5 @@ func accountPage(emails []string, nextCursor string) string {
 		))
 	}
 
-	if nextCursor == "" {
-		return fmt.Sprintf(`{"items":[%s]}`, strings.Join(items, ","))
-	}
-
-	return fmt.Sprintf(`{"items":[%s],"next_starting_after":%q}`, strings.Join(items, ","), nextCursor)
+	return instantlytest.Page(items, nextCursor)
 }

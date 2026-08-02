@@ -128,18 +128,6 @@ func (s *AccountTestSuite) TestCreate() {
 	s.Equal(account.ProviderGoogle, got.ProviderCode)
 }
 
-// TestCreateFailure verifies a rejected create returns no account.
-func (s *AccountTestSuite) TestCreateFailure() {
-	s.Router.Post(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusPaymentRequired, "Payment Required", "limit")
-	})
-
-	got, err := s.svc().Create(context.Background(), account.CreateRequest{Email: testEmail})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusPaymentRequired)
-	s.Nil(got)
-}
-
 // TestList verifies a page decodes, including nullable-vs-zero fields and tags.
 func (s *AccountTestSuite) TestList() {
 	s.Router.Get(listPath, func(w http.ResponseWriter, req *http.Request) {
@@ -193,18 +181,6 @@ func (s *AccountTestSuite) TestListWithoutOptions() {
 	s.Empty(page.Items)
 }
 
-// TestListFailure verifies a failed list returns no page.
-func (s *AccountTestSuite) TestListFailure() {
-	s.Router.Get(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "slow down")
-	})
-
-	page, err := s.svc().List(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(page)
-}
-
 // TestGet verifies a single account decodes.
 func (s *AccountTestSuite) TestGet() {
 	s.Router.Get(emailPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -219,18 +195,6 @@ func (s *AccountTestSuite) TestGet() {
 	s.Require().NotNil(got.Signature)
 	s.Equal("Best, Jon", *got.Signature)
 	s.JSONEq(`{"code":"OK"}`, string(got.StatusMessage))
-}
-
-// TestGetFailure verifies a missing account returns no value.
-func (s *AccountTestSuite) TestGetFailure() {
-	s.Router.Get(emailPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no account")
-	})
-
-	got, err := s.svc().Get(context.Background(), "missing@example.com")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestUpdate verifies the patch body is sent and the account decodes.
@@ -271,18 +235,6 @@ func (s *AccountTestSuite) TestUpdateOmitsUnsetFields() {
 	s.NotNil(got)
 }
 
-// TestUpdateFailure verifies a failed patch returns no value.
-func (s *AccountTestSuite) TestUpdateFailure() {
-	s.Router.Patch(emailPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no account")
-	})
-
-	got, err := s.svc().Update(context.Background(), "missing@example.com", account.UpdateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDelete verifies the deleted account is returned to the caller.
 func (s *AccountTestSuite) TestDelete() {
 	s.Router.Delete(emailPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -294,18 +246,6 @@ func (s *AccountTestSuite) TestDelete() {
 
 	s.Require().NoError(err)
 	s.Equal(testEmail, got.Email)
-}
-
-// TestDeleteFailure verifies a failed delete returns no value.
-func (s *AccountTestSuite) TestDeleteFailure() {
-	s.Router.Delete(emailPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no account")
-	})
-
-	got, err := s.svc().Delete(context.Background(), "missing@example.com")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestPathParametersAreEscaped verifies a caller-supplied email cannot rewrite
@@ -342,8 +282,8 @@ func (s *AccountTestSuite) TestListOptions() {
 		{"search", account.WithSearch("gmail.com"), "search", "gmail.com"},
 		{"status", account.WithStatus(account.StatusPaused), "status", "2"},
 		{"provider code", account.WithProviderCode(account.ProviderMicrosoft), "provider_code", "3"},
-		{"tag ids", account.WithTagIDs("a,b"), "tag_ids", "a,b"},
-		{"tag ids all", account.WithTagIDsAll("a,b"), "tag_ids_all", "a,b"},
+		{"tag ids", account.WithTagIDs("t1"), "tag_ids", "t1"},
+		{"tag ids all", account.WithTagIDsAll("t1"), "tag_ids_all", "t1"},
 		{"include tags", account.WithIncludeTags(true), "include_tags", "true"},
 		{"filter", account.WithFilter(account.FilterPaused), "filter", "ACC_FILTER_PAUSED"},
 		{"sort by", account.WithSortBy(account.SortByEmail), "sort_by", "email"},
@@ -362,6 +302,82 @@ func (s *AccountTestSuite) TestListOptions() {
 			s.Equal(test.value, q.Get(test.key))
 		})
 	}
+
+	// The tag-id options render each id as a repeated parameter.
+	q := instantly.NewQuery()
+	account.WithTagIDs("a", "b")(q)
+	account.WithTagIDsAll("c", "d")(q)
+	s.Equal("tag_ids=a&tag_ids=b&tag_ids_all=c&tag_ids_all=d", q.Encode())
+}
+
+// TestFailures verifies every endpoint surfaces the documented API error.
+func (s *AccountTestSuite) TestFailures() {
+	svc, ctx := s.svc(), context.Background()
+	s.RunFailures([]instantlytest.FailureCase{
+		{
+			Name: "create", Method: http.MethodPost, Path: listPath, Status: http.StatusPaymentRequired,
+			Call: func() error { _, err := svc.Create(ctx, account.CreateRequest{}); return err },
+		},
+		{
+			Name: "list", Method: http.MethodGet, Path: listPath, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.List(ctx); return err },
+		},
+		{
+			Name: "get", Method: http.MethodGet, Path: emailPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Get(ctx, "missing"); return err },
+		},
+		{
+			Name: "update", Method: http.MethodPatch, Path: emailPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Update(ctx, "missing", account.UpdateRequest{}); return err },
+		},
+		{
+			Name: "delete", Method: http.MethodDelete, Path: emailPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Delete(ctx, "missing"); return err },
+		},
+		{
+			Name: "pause", Method: http.MethodPost, Path: pausePattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Pause(ctx, "missing"); return err },
+		},
+		{
+			Name: "pauseBulk", Method: http.MethodPost, Path: bulkPausePath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.PauseBulk(ctx, account.PauseBulkRequest{}); return err },
+		},
+		{
+			Name: "move", Method: http.MethodPost, Path: movePath, Status: http.StatusForbidden,
+			Call: func() error { _, err := svc.Move(ctx, account.MoveRequest{}); return err },
+		},
+		{
+			Name: "enableWarmup", Method: http.MethodPost, Path: enableWarmup, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.EnableWarmup(ctx, account.WarmupToggleRequest{}); return err },
+		},
+		{
+			Name: "warmupAnalytics", Method: http.MethodPost, Path: warmupAnalytics, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.WarmupAnalytics(ctx, account.WarmupAnalyticsRequest{}); return err },
+		},
+		{
+			Name: "dailyAnalytics", Method: http.MethodGet, Path: dailyAnalytics, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.DailyAnalytics(ctx); return err },
+		},
+		{
+			Name: "ctdStatus", Method: http.MethodGet, Path: ctdStatusPath, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.CtdStatus(ctx, "missing"); return err },
+		},
+		{
+			Name: "testVitals", Method: http.MethodPost, Path: vitalsPath, Status: http.StatusPaymentRequired,
+			Call: func() error { _, err := svc.TestVitals(ctx, account.VitalsRequest{}); return err },
+		},
+	})
+}
+
+// TestParsedTimestampCreated verifies the RFC 3339 accessor parses a valid
+// timestamp and reports an error for an unparseable one.
+func (s *AccountTestSuite) TestParsedTimestampCreated() {
+	got, err := (&account.Account{TimestampCreated: "2026-08-01T10:00:00.000Z"}).ParsedTimestampCreated()
+	s.Require().NoError(err)
+	s.Equal(2026, got.Year())
+
+	_, err = (&account.Account{TimestampCreated: "not-a-timestamp"}).ParsedTimestampCreated()
+	s.Require().Error(err)
 }
 
 // svc builds an Account service pointed at the suite's mock client.

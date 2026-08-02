@@ -3,7 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
-	"net/url"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 )
@@ -222,15 +222,19 @@ type Account struct {
 	Tags []Tag `json:"tags,omitempty"`
 }
 
-// ListResponse is a single page of accounts.
-type ListResponse struct {
-	// Items are the accounts on this page.
-	Items []Account `json:"items"`
-
-	// NextStartingAfter is the cursor for the following page, and is empty on
-	// the last page.
-	NextStartingAfter string `json:"next_starting_after,omitempty"`
+// ParsedTimestampCreated parses TimestampCreated as an RFC 3339 time.
+//
+// The raw string field is left untouched so a decoded account re-encodes
+// byte-for-byte; call this accessor when a time.Time is needed.
+func (a *Account) ParsedTimestampCreated() (time.Time, error) {
+	return time.Parse(time.RFC3339, a.TimestampCreated)
 }
+
+// ListResponse is a single page of accounts.
+//
+// It aliases instantly.Page[Account], the cursor-paginated envelope every
+// resource shares, so the generic pagination helpers accept List directly.
+type ListResponse = instantly.Page[Account]
 
 // CreateRequest is the body of a create-account request.
 //
@@ -352,12 +356,7 @@ type UpdateRequest struct {
 
 // Create adds a new sending account and returns it.
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*Account, error) {
-	out := &Account{}
-	if err := s.client.Post(ctx, basePath, req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Account](ctx, s.client, basePath, req)
 }
 
 // List returns a single page of accounts filtered by the supplied options.
@@ -365,47 +364,20 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Account, erro
 // Pagination is cursor based: pass the returned NextStartingAfter back with
 // WithStartingAfter to fetch the following page.
 func (s *Service) List(ctx context.Context, opts ...ListOption) (*ListResponse, error) {
-	q := instantly.NewQuery()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(q)
-		}
-	}
-
-	out := &ListResponse{}
-	if err := s.client.Get(ctx, q.Path(basePath), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[ListResponse](ctx, s.client, instantly.ApplyOptions(opts...).Path(basePath))
 }
 
 // Get returns a single account by its email address.
 func (s *Service) Get(ctx context.Context, email string) (*Account, error) {
-	out := &Account{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(email), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[Account](ctx, s.client, instantly.JoinPath(basePath, email))
 }
 
 // Update patches an account and returns its updated state.
 func (s *Service) Update(ctx context.Context, email string, req UpdateRequest) (*Account, error) {
-	out := &Account{}
-	if err := s.client.Patch(ctx, basePath+"/"+url.PathEscape(email), req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PatchResult[Account](ctx, s.client, instantly.JoinPath(basePath, email), req)
 }
 
 // Delete deletes an account and returns the account that was deleted.
 func (s *Service) Delete(ctx context.Context, email string) (*Account, error) {
-	out := &Account{}
-	if err := s.client.Delete(ctx, basePath+"/"+url.PathEscape(email), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.DeleteResult[Account](ctx, s.client, instantly.JoinPath(basePath, email))
 }

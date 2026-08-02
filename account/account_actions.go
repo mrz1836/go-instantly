@@ -3,7 +3,6 @@ package account
 import (
 	"context"
 	"encoding/json"
-	"net/url"
 
 	"github.com/mrz1836/go-instantly"
 )
@@ -236,22 +235,12 @@ func (s *Service) MarkFixed(ctx context.Context, email string) (*Account, error)
 // PauseBulk pauses several accounts at once, reporting which paused and which
 // failed.
 func (s *Service) PauseBulk(ctx context.Context, req PauseBulkRequest) (*PauseBulkResponse, error) {
-	out := &PauseBulkResponse{}
-	if err := s.client.Post(ctx, basePath+"/pause", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[PauseBulkResponse](ctx, s.client, basePath+"/pause", req)
 }
 
 // Move moves accounts between workspaces.
 func (s *Service) Move(ctx context.Context, req MoveRequest) (*MoveResponse, error) {
-	out := &MoveResponse{}
-	if err := s.client.Post(ctx, basePath+"/move", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[MoveResponse](ctx, s.client, basePath+"/move", req)
 }
 
 // EnableWarmup enables warmup for the targeted accounts and returns the
@@ -270,23 +259,13 @@ func (s *Service) DisableWarmup(ctx context.Context, req WarmupToggleRequest) (*
 func (s *Service) WarmupAnalytics(
 	ctx context.Context, req WarmupAnalyticsRequest,
 ) (*WarmupAnalyticsResponse, error) {
-	out := &WarmupAnalyticsResponse{}
-	if err := s.client.Post(ctx, basePath+"/warmup-analytics", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[WarmupAnalyticsResponse](ctx, s.client, basePath+"/warmup-analytics", req)
 }
 
 // DailyAnalytics returns daily sending analytics filtered by the supplied
 // options.
 func (s *Service) DailyAnalytics(ctx context.Context, opts ...AnalyticsOption) ([]DailyAnalytics, error) {
-	q := instantly.NewQuery()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(q)
-		}
-	}
+	q := instantly.ApplyOptions(opts...)
 
 	var out []DailyAnalytics
 	if err := s.client.Get(ctx, q.Path(basePath+"/analytics/daily"), &out); err != nil {
@@ -300,42 +279,22 @@ func (s *Service) DailyAnalytics(ctx context.Context, opts ...AnalyticsOption) (
 func (s *Service) CtdStatus(ctx context.Context, host string) (*CtdStatus, error) {
 	q := instantly.NewQuery().SetString("host", host)
 
-	out := &CtdStatus{}
-	if err := s.client.Get(ctx, q.Path(basePath+"/ctd/status"), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[CtdStatus](ctx, s.client, q.Path(basePath+"/ctd/status"))
 }
 
 // TestVitals tests the DNS vitals of the given accounts.
 func (s *Service) TestVitals(ctx context.Context, req VitalsRequest) (*VitalsResponse, error) {
-	out := &VitalsResponse{}
-	if err := s.client.Post(ctx, basePath+"/test/vitals", req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[VitalsResponse](ctx, s.client, basePath+"/test/vitals", req)
 }
 
 // action performs a single-account POST action that returns the account.
 func (s *Service) action(ctx context.Context, email, verb string) (*Account, error) {
-	out := &Account{}
-	if err := s.client.Post(ctx, basePath+"/"+url.PathEscape(email)+"/"+verb, nil, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Account](ctx, s.client, instantly.JoinPath(basePath, email, verb), nil)
 }
 
 // warmupToggle performs an enable- or disable-warmup POST that returns a job.
 func (s *Service) warmupToggle(
 	ctx context.Context, verb string, req WarmupToggleRequest,
 ) (*BackgroundJob, error) {
-	out := &BackgroundJob{}
-	if err := s.client.Post(ctx, basePath+"/warmup/"+verb, req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[BackgroundJob](ctx, s.client, instantly.JoinPath(basePath, "warmup", verb), req)
 }

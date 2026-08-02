@@ -1,6 +1,8 @@
 package account
 
 import (
+	"time"
+
 	"github.com/mrz1836/go-instantly"
 )
 
@@ -97,19 +99,23 @@ func WithProviderCode(code ProviderCode) ListOption {
 	}
 }
 
-// WithTagIDs restricts results to accounts that have any of the given tag ids,
-// supplied as a comma-separated list.
-func WithTagIDs(tagIDs string) ListOption {
+// WithTagIDs restricts results to accounts that have any of the given tag ids.
+// Each id is sent as a repeated tag_ids query parameter.
+func WithTagIDs(tagIDs ...string) ListOption {
 	return func(q *instantly.Query) {
-		q.SetString("tag_ids", tagIDs)
+		for _, id := range tagIDs {
+			q.AddString("tag_ids", id)
+		}
 	}
 }
 
 // WithTagIDsAll restricts results to accounts that have all of the given tag
-// ids, supplied as a comma-separated list.
-func WithTagIDsAll(tagIDs string) ListOption {
+// ids. Each id is sent as a repeated tag_ids_all query parameter.
+func WithTagIDsAll(tagIDs ...string) ListOption {
 	return func(q *instantly.Query) {
-		q.SetString("tag_ids_all", tagIDs)
+		for _, id := range tagIDs {
+			q.AddString("tag_ids_all", id)
+		}
 	}
 }
 
@@ -152,17 +158,19 @@ func WithSkip(skip int) ListOption {
 // AnalyticsOption customizes a DailyAnalytics request.
 type AnalyticsOption func(*instantly.Query)
 
-// WithStartDate restricts daily analytics to on or after the given date.
-func WithStartDate(date string) AnalyticsOption {
+// WithStartDate restricts daily analytics to on or after the given date. The
+// date is sent as a YYYY-MM-DD wire value; only its calendar date is used.
+func WithStartDate(date time.Time) AnalyticsOption {
 	return func(q *instantly.Query) {
-		q.SetString("start_date", date)
+		q.SetString("start_date", date.Format(time.DateOnly))
 	}
 }
 
-// WithEndDate restricts daily analytics to on or before the given date.
-func WithEndDate(date string) AnalyticsOption {
+// WithEndDate restricts daily analytics to on or before the given date. The
+// date is sent as a YYYY-MM-DD wire value; only its calendar date is used.
+func WithEndDate(date time.Time) AnalyticsOption {
 	return func(q *instantly.Query) {
-		q.SetString("end_date", date)
+		q.SetString("end_date", date.Format(time.DateOnly))
 	}
 }
 
