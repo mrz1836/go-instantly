@@ -200,11 +200,11 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**117 / 171 operations · 15 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+**137 / 171 operations · 19 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
 Campaign, Lead, Lead List, Lead Label, Campaign Subsequence, Email Verification, Inbox Placement Test,
-Inbox Placement Analytics, Inbox Placement Report, SuperSearch Enrichment, Webhook, Webhook Event); every
-remaining resource is listed below with a link to its reference docs and its operation count, so you can
-see exactly what is left.
+Inbox Placement Analytics, Inbox Placement Report, SuperSearch Enrichment, Webhook, Webhook Event,
+Workspace, Workspace Member, Workspace Group Member, Workspace Billing); every remaining resource is
+listed below with a link to its reference docs and its operation count, so you can see exactly what is left.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
 	* [x] [`POST /api/v2/emails/test`](email/email.go) - Send a test email (`email.Service.SendTest`)
@@ -338,21 +338,41 @@ see exactly what is left.
 	* [x] `GET /api/v2/webhook-events/{id}` - Get event (`webhookevent.Service.Get`)
 	* [x] `GET /api/v2/webhook-events/summary` - Overview summary (`webhookevent.Service.Summary`)
 	* [x] `GET /api/v2/webhook-events/summary-by-date` - Summary by date (`webhookevent.Service.SummaryByDate`)
+* [x] **[Workspace API](https://developer.instantly.ai/api-reference/workspace) — ([`workspace/`](workspace/workspace.go))**
+	* [x] `GET /api/v2/workspaces/current` - Get current workspace (`workspace.Service.Get`)
+	* [x] `PATCH /api/v2/workspaces/current` - Patch workspace (`workspace.Service.Update`)
+	* [x] `POST /api/v2/workspaces/current/schedule-for-removal` - Schedule removal (`workspace.Service.ScheduleRemoval`)
+	* [x] `DELETE /api/v2/workspaces/current/schedule-for-removal` - Cancel removal (`workspace.Service.CancelRemoval`)
+	* [x] `POST /api/v2/workspaces/current/whitelabel-domain` - Set agency domain (`workspace.Service.SetAgencyDomain`)
+	* [x] `GET /api/v2/workspaces/current/whitelabel-domain` - Get domain info (`workspace.Service.DomainInfo`)
+	* [x] `DELETE /api/v2/workspaces/current/whitelabel-domain` - Delete agency domain (`workspace.Service.DeleteAgencyDomain`)
+	* [x] `POST /api/v2/workspaces/current/change-owner` - Change owner (`workspace.Service.ChangeOwner`)
+* [x] **[Workspace Member API](https://developer.instantly.ai/api-reference/workspacemember) — ([`workspacemember/`](workspacemember/workspacemember.go))**
+	* [x] `POST /api/v2/workspace-members` - Invite member (`workspacemember.Service.Create`)
+	* [x] `GET /api/v2/workspace-members` - List members (`workspacemember.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/workspace-members/{id}` - Get member (`workspacemember.Service.Get`)
+	* [x] `PATCH /api/v2/workspace-members/{id}` - Patch member (`workspacemember.Service.Update`)
+	* [x] `DELETE /api/v2/workspace-members/{id}` - Remove member (`workspacemember.Service.Delete`)
+* [x] **[Workspace Group Member API](https://developer.instantly.ai/api-reference/workspacegroupmember) — ([`workspacegroup/`](workspacegroup/workspacegroup.go))**
+	* [x] `POST /api/v2/workspace-group-members` - Invite sub workspace (`workspacegroup.Service.Create`)
+	* [x] `GET /api/v2/workspace-group-members` - List group members (`workspacegroup.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/workspace-group-members/{id}` - Get group member (`workspacegroup.Service.Get`)
+	* [x] `DELETE /api/v2/workspace-group-members/{id}` - Remove group member (`workspacegroup.Service.Delete`)
+	* [x] `GET /api/v2/workspace-group-members/admin` - Get admin workspace (`workspacegroup.Service.Admin`)
+* [x] **[Workspace Billing API](https://developer.instantly.ai/api-reference/workspacebilling) — ([`workspacebilling/`](workspacebilling/workspacebilling.go))**
+	* [x] `GET /api/v2/workspace-billing/plan-details` - Plan details (`workspacebilling.Service.PlanDetails`)
+	* [x] `GET /api/v2/workspace-billing/subscription-details` - Subscription details (`workspacebilling.Service.SubscriptionDetails`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
 
 * [ ] **[BlockListEntry](https://developer.instantly.ai/api-reference/blocklistentry)** - 9 operations
-* [ ] **[Workspace](https://developer.instantly.ai/api-reference/workspace)** - 8 operations
 * [ ] **[DFYEmailAccountOrder](https://developer.instantly.ai/api-reference/dfyemailaccountorder)** - 7 operations
 * [ ] **[CustomTag](https://developer.instantly.ai/api-reference/customtag)** - 6 operations
-* [ ] **[WorkspaceGroupMember](https://developer.instantly.ai/api-reference/workspacegroupmember)** - 5 operations
-* [ ] **[WorkspaceMember](https://developer.instantly.ai/api-reference/workspacemember)** - 5 operations
 * [ ] **[APIKey](https://developer.instantly.ai/api-reference/apikey)** - 3 operations
 * [ ] **[OAuth](https://developer.instantly.ai/api-reference/oauth)** - 3 operations
 * [ ] **[BackgroundJob](https://developer.instantly.ai/api-reference/backgroundjob)** - 2 operations
 * [ ] **[CRMActions](https://developer.instantly.ai/api-reference/crmactions)** - 2 operations
-* [ ] **[WorkspaceBilling](https://developer.instantly.ai/api-reference/workspacebilling)** - 2 operations
 * [ ] **[AuditLog](https://developer.instantly.ai/api-reference/auditlog)** - 1 operation
 * [ ] **[CustomTagMapping](https://developer.instantly.ai/api-reference/customtagmapping)** - 1 operation
 

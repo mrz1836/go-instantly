@@ -27,6 +27,8 @@ import (
 	"github.com/mrz1836/go-instantly/supersearch"
 	"github.com/mrz1836/go-instantly/webhook"
 	"github.com/mrz1836/go-instantly/webhookevent"
+	"github.com/mrz1836/go-instantly/workspace"
+	"github.com/mrz1836/go-instantly/workspacemember"
 )
 
 func main() {
@@ -54,6 +56,8 @@ func main() {
 	enrichment := supersearch.New(client)
 	webhooks := webhook.New(client)
 	webhookEvents := webhookevent.New(client)
+	workspaces := workspace.New(client)
+	members := workspacemember.New(client)
 
 	ctx := context.Background()
 
@@ -98,6 +102,10 @@ func main() {
 	}
 
 	if err := manageWebhooks(ctx, webhooks, webhookEvents); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := manageWorkspace(ctx, workspaces, members); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -304,6 +312,39 @@ func manageWebhooks(
 	}
 
 	log.Printf("overall delivery success rate: %.1f%%", summary.SuccessRate*100)
+
+	return nil
+}
+
+// manageWorkspace reads the current workspace and invites a member to it.
+//
+// The Workspace API operates on a single workspace — the one the API key
+// authenticates against — so its methods take no workspace id. Roles and
+// permissions are typed, so an invalid value is a compile error rather than a
+// rejected request.
+func manageWorkspace(
+	ctx context.Context, workspaces *workspace.Service, members *workspacemember.Service,
+) error {
+	current, err := workspaces.Get(ctx)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("workspace %s owned by %s", sanitize(current.Name), sanitize(current.Owner))
+
+	member, err := members.Create(ctx, workspacemember.CreateRequest{
+		Email: "teammate@example.com",
+		Role:  workspacemember.RoleEditor,
+		Permissions: []workspacemember.Permission{
+			workspacemember.PermissionCampaignsView,
+			workspacemember.PermissionUniboxAll,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("invited member %s as %s", sanitize(member.Email), sanitize(string(member.Role)))
 
 	return nil
 }

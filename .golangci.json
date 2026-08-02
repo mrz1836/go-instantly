@@ -181,7 +181,8 @@
             "misspell": {
                 "ignore-rules": [
                     "bsv",
-                    "bitcoin"
+                    "bitcoin",
+                    "cancelled"
                 ],
                 "locale": "US"
             },
