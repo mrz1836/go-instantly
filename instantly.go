@@ -204,7 +204,7 @@ func (c *Client) do(ctx context.Context, method, path string, payload any) (int,
 
 	res, err := c.httpClientOrDefault().Do(req)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, fmt.Errorf("instantly: request failed: %w", err)
 	}
 
 	defer func() {
@@ -213,7 +213,7 @@ func (c *Client) do(ctx context.Context, method, path string, payload any) (int,
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return res.StatusCode, nil, err
+		return res.StatusCode, nil, fmt.Errorf("instantly: failed to read response body: %w", err)
 	}
 
 	// Failures arrive either as a 4xx envelope or inside a success body, and
@@ -249,7 +249,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, payload an
 	// Paths carry their own /api/v2 prefix, so the base URL is the bare host.
 	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, bodyReader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("instantly: failed to build request: %w", err)
 	}
 
 	if payloadData != nil {
