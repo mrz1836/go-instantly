@@ -200,8 +200,8 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**70 / 171 operations · 7 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
-Campaign, Lead, Lead List, Lead Label); every remaining resource is listed below with a link to its
+**79 / 171 operations · 8 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+Campaign, Lead, Lead List, Lead Label, Campaign Subsequence); every remaining resource is listed below with a link to its
 reference docs and its operation count, so you can see exactly what is left.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
@@ -281,13 +281,22 @@ reference docs and its operation count, so you can see exactly what is left.
 	* [x] `PATCH /api/v2/lead-labels/{id}` - Patch (`leadlabel.Service.Update`)
 	* [x] `DELETE /api/v2/lead-labels/{id}` - Delete (`leadlabel.Service.Delete`)
 	* [x] `POST /api/v2/lead-labels/ai-reply-label` - Test AI reply label (`leadlabel.Service.TestAIReplyLabel`)
+* [x] **[Campaign Subsequence API](https://developer.instantly.ai/api-reference/campaignsubsequence) — ([`subsequence/`](subsequence/subsequence.go))**
+	* [x] `POST /api/v2/subsequences` - Create (`subsequence.Service.Create`)
+	* [x] `GET /api/v2/subsequences` - List (`subsequence.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/subsequences/{id}` - Get (`subsequence.Service.Get`)
+	* [x] `PATCH /api/v2/subsequences/{id}` - Patch (`subsequence.Service.Update`)
+	* [x] `DELETE /api/v2/subsequences/{id}` - Delete (`subsequence.Service.Delete`)
+	* [x] `POST /api/v2/subsequences/{id}/duplicate` - Duplicate (`subsequence.Service.Duplicate`)
+	* [x] `POST /api/v2/subsequences/{id}/pause` - Pause (`subsequence.Service.Pause`)
+	* [x] `POST /api/v2/subsequences/{id}/resume` - Resume (`subsequence.Service.Resume`)
+	* [x] `GET /api/v2/subsequences/{id}/sending-status` - Sending status (`subsequence.Service.SendingStatus`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
 
 * [ ] **[SuperSearchEnrichment](https://developer.instantly.ai/api-reference/supersearchenrichment)** - 11 operations
 * [ ] **[BlockListEntry](https://developer.instantly.ai/api-reference/blocklistentry)** - 9 operations
-* [ ] **[CampaignSubsequence](https://developer.instantly.ai/api-reference/campaignsubsequence)** - 9 operations
 * [ ] **[Webhook](https://developer.instantly.ai/api-reference/webhook)** - 8 operations
 * [ ] **[Workspace](https://developer.instantly.ai/api-reference/workspace)** - 8 operations
 * [ ] **[DFYEmailAccountOrder](https://developer.instantly.ai/api-reference/dfyemailaccountorder)** - 7 operations
