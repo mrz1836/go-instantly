@@ -14,19 +14,5 @@ import (
 // drive pagination themselves. Iteration stops at the first error, which is
 // yielded with a nil *Campaign, and stops early when the context is canceled.
 func (s *Service) ListIter(ctx context.Context, opts ...ListOption) iter.Seq2[*Campaign, error] {
-	return instantly.Iterate(ctx, func(ctx context.Context, cursor string) ([]Campaign, string, error) {
-		pageOpts := opts
-		if cursor != "" {
-			// The cursor is appended last so it overrides any starting cursor the
-			// caller supplied. A fresh slice keeps the caller's options unmutated.
-			pageOpts = append(append([]ListOption(nil), opts...), WithStartingAfter(cursor))
-		}
-
-		page, err := s.List(ctx, pageOpts...)
-		if err != nil {
-			return nil, "", err
-		}
-
-		return page.Items, page.NextStartingAfter, nil
-	})
+	return instantly.Paginate(ctx, opts, WithStartingAfter, s.List)
 }

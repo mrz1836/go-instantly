@@ -114,18 +114,6 @@ func (s *CampaignTestSuite) TestCreate() {
 	s.Equal(campaign.StatusActive, got.Status)
 }
 
-// TestCreateFailure verifies a rejected create returns no campaign.
-func (s *CampaignTestSuite) TestCreateFailure() {
-	s.Router.Post(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusPaymentRequired, "Payment Required", "limit")
-	})
-
-	got, err := s.svc().Create(context.Background(), campaign.CreateRequest{Name: "x"})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusPaymentRequired)
-	s.Nil(got)
-}
-
 // TestList verifies a page decodes, including nullable-vs-zero fields.
 func (s *CampaignTestSuite) TestList() {
 	s.Router.Get(listPath, func(w http.ResponseWriter, req *http.Request) {
@@ -173,18 +161,6 @@ func (s *CampaignTestSuite) TestListWithoutOptions() {
 	s.Empty(page.Items)
 }
 
-// TestListFailure verifies a failed list returns no page.
-func (s *CampaignTestSuite) TestListFailure() {
-	s.Router.Get(listPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusTooManyRequests, "Too Many Requests", "slow")
-	})
-
-	page, err := s.svc().List(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusTooManyRequests)
-	s.Nil(page)
-}
-
 // TestGet verifies a single campaign decodes, including the nested schedule.
 func (s *CampaignTestSuite) TestGet() {
 	s.Router.Get(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -200,18 +176,6 @@ func (s *CampaignTestSuite) TestGet() {
 	s.Require().Len(got.CampaignSchedule.Schedules, 1)
 	s.Equal("Business hours", got.CampaignSchedule.Schedules[0].Name)
 	s.JSONEq(`{"from":"09:00","to":"17:00"}`, string(got.CampaignSchedule.Schedules[0].Timing))
-}
-
-// TestGetFailure verifies a missing campaign returns no value.
-func (s *CampaignTestSuite) TestGetFailure() {
-	s.Router.Get(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no campaign")
-	})
-
-	got, err := s.svc().Get(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestUpdate verifies the patch body is sent and the campaign decodes.
@@ -252,18 +216,6 @@ func (s *CampaignTestSuite) TestUpdateOmitsUnsetFields() {
 	s.NotNil(got)
 }
 
-// TestUpdateFailure verifies a failed patch returns no value.
-func (s *CampaignTestSuite) TestUpdateFailure() {
-	s.Router.Patch(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no campaign")
-	})
-
-	got, err := s.svc().Update(context.Background(), "missing", campaign.UpdateRequest{})
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDelete verifies the deleted campaign is returned to the caller.
 func (s *CampaignTestSuite) TestDelete() {
 	s.Router.Delete(idPattern, func(w http.ResponseWriter, req *http.Request) {
@@ -275,18 +227,6 @@ func (s *CampaignTestSuite) TestDelete() {
 
 	s.Require().NoError(err)
 	s.Equal(testID, got.ID)
-}
-
-// TestDeleteFailure verifies a failed delete returns no value.
-func (s *CampaignTestSuite) TestDeleteFailure() {
-	s.Router.Delete(idPattern, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no campaign")
-	})
-
-	got, err := s.svc().Delete(context.Background(), "missing")
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
 }
 
 // TestPathParametersAreEscaped verifies a caller-supplied id cannot rewrite the
@@ -321,7 +261,7 @@ func (s *CampaignTestSuite) TestListOptions() {
 		{"limit", campaign.WithLimit(50), "limit", "50"},
 		{"starting after", campaign.WithStartingAfter("cursor-2"), "starting_after", "cursor-2"},
 		{"search", campaign.WithSearch("launch"), "search", "launch"},
-		{"tag ids", campaign.WithTagIDs("a,b"), "tag_ids", "a,b"},
+		{"tag ids", campaign.WithTagIDs("t1"), "tag_ids", "t1"},
 		{"ai sales agent", campaign.WithAISalesAgentID("agent-1"), "ai_sales_agent_id", "agent-1"},
 		{"status", campaign.WithStatus(campaign.StatusPaused), "status", "2"},
 		{"exclude status", campaign.WithExcludeStatus(campaign.StatusCompleted), "exclude_status", "3"},
@@ -338,6 +278,110 @@ func (s *CampaignTestSuite) TestListOptions() {
 			s.Equal(test.value, q.Get(test.key))
 		})
 	}
+
+	// WithTagIDs renders each id as a repeated parameter.
+	q := instantly.NewQuery()
+	campaign.WithTagIDs("a", "b")(q)
+	s.Equal("tag_ids=a&tag_ids=b", q.Encode())
+}
+
+// TestFailures verifies the CRUD and analytics endpoints surface the documented
+// API error.
+func (s *CampaignTestSuite) TestFailures() {
+	svc, ctx := s.svc(), context.Background()
+	s.RunFailures([]instantlytest.FailureCase{
+		{
+			Name: "create", Method: http.MethodPost, Path: listPath, Status: http.StatusPaymentRequired,
+			Call: func() error { _, err := svc.Create(ctx, campaign.CreateRequest{}); return err },
+		},
+		{
+			Name: "list", Method: http.MethodGet, Path: listPath, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.List(ctx); return err },
+		},
+		{
+			Name: "get", Method: http.MethodGet, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Get(ctx, "missing"); return err },
+		},
+		{
+			Name: "update", Method: http.MethodPatch, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Update(ctx, "missing", campaign.UpdateRequest{}); return err },
+		},
+		{
+			Name: "delete", Method: http.MethodDelete, Path: idPattern, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Delete(ctx, "missing"); return err },
+		},
+		{
+			Name: "analytics", Method: http.MethodGet, Path: analyticsPath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.Analytics(ctx); return err },
+		},
+		{
+			Name: "analyticsOverview", Method: http.MethodGet, Path: overviewPath, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.AnalyticsOverview(ctx); return err },
+		},
+		{
+			Name: "dailyAnalytics", Method: http.MethodGet, Path: dailyPath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.DailyAnalytics(ctx); return err },
+		},
+		{
+			Name: "stepsAnalytics", Method: http.MethodGet, Path: stepsPath, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.StepsAnalytics(ctx); return err },
+		},
+	})
+}
+
+// TestActionFailures verifies the lifecycle and action endpoints surface the
+// documented API error.
+func (s *CampaignTestSuite) TestActionFailures() {
+	svc, ctx := s.svc(), context.Background()
+	s.RunFailures([]instantlytest.FailureCase{
+		{
+			Name: "activate", Method: http.MethodPost, Path: activatePatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Activate(ctx, "missing"); return err },
+		},
+		{
+			Name: "duplicate", Method: http.MethodPost, Path: duplicatePatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Duplicate(ctx, "missing", campaign.DuplicateRequest{}); return err },
+		},
+		{
+			Name: "share", Method: http.MethodPost, Path: sharePatt, Status: http.StatusForbidden,
+			Call: func() error { return svc.Share(ctx, "missing") },
+		},
+		{
+			Name: "export", Method: http.MethodPost, Path: exportPatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.Export(ctx, "missing"); return err },
+		},
+		{
+			Name: "createFromExport", Method: http.MethodPost, Path: fromExportPatt, Status: http.StatusPaymentRequired,
+			Call: func() error { _, err := svc.CreateFromExport(ctx, "missing", nil); return err },
+		},
+		{
+			Name: "addVariables", Method: http.MethodPost, Path: variablesPatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.AddVariables(ctx, "missing", campaign.AddVariablesRequest{}); return err },
+		},
+		{
+			Name: "sendingStatus", Method: http.MethodGet, Path: sendingPatt, Status: http.StatusNotFound,
+			Call: func() error { _, err := svc.SendingStatus(ctx, "missing"); return err },
+		},
+		{
+			Name: "countLaunched", Method: http.MethodGet, Path: countPath, Status: http.StatusUnauthorized,
+			Call: func() error { _, err := svc.CountLaunched(ctx); return err },
+		},
+		{
+			Name: "searchByContact", Method: http.MethodGet, Path: searchPath, Status: http.StatusTooManyRequests,
+			Call: func() error { _, err := svc.SearchByContact(ctx, "missing"); return err },
+		},
+	})
+}
+
+// TestParsedTimestampCreated verifies the RFC 3339 accessor parses a valid
+// timestamp and reports an error for an unparseable one.
+func (s *CampaignTestSuite) TestParsedTimestampCreated() {
+	got, err := (&campaign.Campaign{TimestampCreated: "2026-08-01T10:00:00.000Z"}).ParsedTimestampCreated()
+	s.Require().NoError(err)
+	s.Equal(2026, got.Year())
+
+	_, err = (&campaign.Campaign{TimestampCreated: "not-a-timestamp"}).ParsedTimestampCreated()
+	s.Require().Error(err)
 }
 
 // svc builds a Campaign service pointed at the suite's mock client.

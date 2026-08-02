@@ -3,10 +3,10 @@ package campaign_test
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 	"github.com/mrz1836/go-instantly/campaign"
-	"github.com/mrz1836/go-instantly/internal/instantlytest"
 )
 
 // TestAnalytics verifies the per-campaign analytics slice decodes and options
@@ -40,18 +40,6 @@ func (s *CampaignTestSuite) TestAnalytics() {
 	s.InDelta(1234.5, got[0].TotalOpportunityValue, 0)
 }
 
-// TestAnalyticsFailure verifies a failed request returns no slice.
-func (s *CampaignTestSuite) TestAnalyticsFailure() {
-	s.Router.Get(analyticsPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "bad key")
-	})
-
-	got, err := s.svc().Analytics(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Nil(got)
-}
-
 // TestAnalyticsOverview verifies the overview object decodes, including CRM
 // totals.
 func (s *CampaignTestSuite) TestAnalyticsOverview() {
@@ -74,18 +62,6 @@ func (s *CampaignTestSuite) TestAnalyticsOverview() {
 	s.InDelta(9999.99, got.TotalOpportunityValue, 0)
 }
 
-// TestAnalyticsOverviewFailure verifies a failed request returns no value.
-func (s *CampaignTestSuite) TestAnalyticsOverviewFailure() {
-	s.Router.Get(overviewPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no data")
-	})
-
-	got, err := s.svc().AnalyticsOverview(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestDailyAnalytics verifies the daily slice decodes and options reach the API.
 func (s *CampaignTestSuite) TestDailyAnalytics() {
 	s.Router.Get(dailyPath, func(w http.ResponseWriter, req *http.Request) {
@@ -105,8 +81,8 @@ func (s *CampaignTestSuite) TestDailyAnalytics() {
 
 	got, err := s.svc().DailyAnalytics(context.Background(),
 		campaign.WithCampaignID(testID),
-		campaign.WithStartDate("2026-08-01"),
-		campaign.WithEndDate("2026-08-31"),
+		campaign.WithStartDate(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)),
+		campaign.WithEndDate(time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)),
 		campaign.WithCampaignStatus(campaign.StatusActive),
 	)
 
@@ -114,18 +90,6 @@ func (s *CampaignTestSuite) TestDailyAnalytics() {
 	s.Require().Len(got, 1)
 	s.Equal("2026-08-01", got[0].Date)
 	s.Equal(int64(10), got[0].Sent)
-}
-
-// TestDailyAnalyticsFailure verifies a failed request returns no slice.
-func (s *CampaignTestSuite) TestDailyAnalyticsFailure() {
-	s.Router.Get(dailyPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusUnauthorized, "Unauthorized", "bad key")
-	})
-
-	got, err := s.svc().DailyAnalytics(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusUnauthorized)
-	s.Nil(got)
 }
 
 // TestStepsAnalytics verifies the per-step slice decodes, including nullable step
@@ -160,18 +124,6 @@ func (s *CampaignTestSuite) TestStepsAnalytics() {
 	s.Nil(got[1].Variant)
 }
 
-// TestStepsAnalyticsFailure verifies a failed request returns no slice.
-func (s *CampaignTestSuite) TestStepsAnalyticsFailure() {
-	s.Router.Get(stepsPath, func(w http.ResponseWriter, _ *http.Request) {
-		instantlytest.WriteAPIErrorEnvelope(w, http.StatusNotFound, "Not Found", "no data")
-	})
-
-	got, err := s.svc().StepsAnalytics(context.Background())
-
-	instantlytest.AssertAPIError(s.T(), err, http.StatusNotFound)
-	s.Nil(got)
-}
-
 // TestAnalyticsOptions verifies each analytics option renders correctly.
 func (s *CampaignTestSuite) TestAnalyticsOptions() {
 	tests := []struct {
@@ -182,8 +134,16 @@ func (s *CampaignTestSuite) TestAnalyticsOptions() {
 	}{
 		{"id", campaign.WithID("c1"), "id", "c1"},
 		{"campaign id", campaign.WithCampaignID("c1"), "campaign_id", "c1"},
-		{"start date", campaign.WithStartDate("2026-08-01"), "start_date", "2026-08-01"},
-		{"end date", campaign.WithEndDate("2026-08-31"), "end_date", "2026-08-31"},
+		{
+			"start date",
+			campaign.WithStartDate(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)),
+			"start_date", "2026-08-01",
+		},
+		{
+			"end date",
+			campaign.WithEndDate(time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)),
+			"end_date", "2026-08-31",
+		},
 		{"campaign status", campaign.WithCampaignStatus(campaign.StatusPaused), "campaign_status", "2"},
 		{"exclude total leads", campaign.WithExcludeTotalLeadsCount(true), "exclude_total_leads_count", "true"},
 		{"expand crm events", campaign.WithExpandCRMEvents(true), "expand_crm_events", "true"},

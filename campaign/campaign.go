@@ -3,7 +3,7 @@ package campaign
 import (
 	"context"
 	"encoding/json"
-	"net/url"
+	"time"
 
 	"github.com/mrz1836/go-instantly"
 )
@@ -201,15 +201,19 @@ type Campaign struct {
 	LimitEmailsPerCompanyOverride json.RawMessage `json:"limit_emails_per_company_override,omitempty"`
 }
 
-// ListResponse is a single page of campaigns.
-type ListResponse struct {
-	// Items are the campaigns on this page.
-	Items []Campaign `json:"items"`
-
-	// NextStartingAfter is the cursor for the following page, and is empty on
-	// the last page.
-	NextStartingAfter string `json:"next_starting_after,omitempty"`
+// ParsedTimestampCreated parses TimestampCreated as an RFC 3339 time.
+//
+// The raw string field is left untouched so a decoded campaign re-encodes
+// byte-for-byte; call this accessor when a time.Time is needed.
+func (c *Campaign) ParsedTimestampCreated() (time.Time, error) {
+	return time.Parse(time.RFC3339, c.TimestampCreated)
 }
+
+// ListResponse is a single page of campaigns.
+//
+// It aliases instantly.Page[Campaign], the cursor-paginated envelope every
+// resource shares, so the generic pagination helpers accept List directly.
+type ListResponse = instantly.Page[Campaign]
 
 // CreateRequest is the body of a create-campaign request. Only Name and
 // CampaignSchedule are required; every other field defaults when omitted.
@@ -392,12 +396,7 @@ type UpdateRequest struct {
 
 // Create adds a new campaign and returns it.
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*Campaign, error) {
-	out := &Campaign{}
-	if err := s.client.Post(ctx, basePath, req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PostResult[Campaign](ctx, s.client, basePath, req)
 }
 
 // List returns a single page of campaigns filtered by the supplied options.
@@ -405,47 +404,20 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Campaign, err
 // Pagination is cursor based: pass the returned NextStartingAfter back with
 // WithStartingAfter to fetch the following page.
 func (s *Service) List(ctx context.Context, opts ...ListOption) (*ListResponse, error) {
-	q := instantly.NewQuery()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(q)
-		}
-	}
-
-	out := &ListResponse{}
-	if err := s.client.Get(ctx, q.Path(basePath), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[ListResponse](ctx, s.client, instantly.ApplyOptions(opts...).Path(basePath))
 }
 
 // Get returns a single campaign by its unique identifier.
 func (s *Service) Get(ctx context.Context, id string) (*Campaign, error) {
-	out := &Campaign{}
-	if err := s.client.Get(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[Campaign](ctx, s.client, instantly.JoinPath(basePath, id))
 }
 
 // Update patches a campaign and returns its updated state.
 func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (*Campaign, error) {
-	out := &Campaign{}
-	if err := s.client.Patch(ctx, basePath+"/"+url.PathEscape(id), req, out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.PatchResult[Campaign](ctx, s.client, instantly.JoinPath(basePath, id), req)
 }
 
 // Delete deletes a campaign and returns the campaign that was deleted.
 func (s *Service) Delete(ctx context.Context, id string) (*Campaign, error) {
-	out := &Campaign{}
-	if err := s.client.Delete(ctx, basePath+"/"+url.PathEscape(id), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.DeleteResult[Campaign](ctx, s.client, instantly.JoinPath(basePath, id))
 }

@@ -253,7 +253,7 @@ type StepAnalytics struct {
 // Analytics returns the aggregate analytics for the campaigns matching the
 // supplied options.
 func (s *Service) Analytics(ctx context.Context, opts ...AnalyticsOption) ([]Analytics, error) {
-	q := applyAnalytics(opts)
+	q := instantly.ApplyOptions(opts...)
 
 	var out []Analytics
 	if err := s.client.Get(ctx, q.Path(basePath+"/analytics"), &out); err != nil {
@@ -266,20 +266,15 @@ func (s *Service) Analytics(ctx context.Context, opts ...AnalyticsOption) ([]Ana
 // AnalyticsOverview returns the aggregate analytics overview for the campaigns
 // matching the supplied options.
 func (s *Service) AnalyticsOverview(ctx context.Context, opts ...AnalyticsOption) (*AnalyticsOverview, error) {
-	q := applyAnalytics(opts)
+	q := instantly.ApplyOptions(opts...)
 
-	out := &AnalyticsOverview{}
-	if err := s.client.Get(ctx, q.Path(basePath+"/analytics/overview"), out); err != nil {
-		return nil, err
-	}
-
-	return out, nil
+	return instantly.GetResult[AnalyticsOverview](ctx, s.client, q.Path(basePath+"/analytics/overview"))
 }
 
 // DailyAnalytics returns the daily analytics for the campaigns matching the
 // supplied options.
 func (s *Service) DailyAnalytics(ctx context.Context, opts ...AnalyticsOption) ([]DailyAnalytics, error) {
-	q := applyAnalytics(opts)
+	q := instantly.ApplyOptions(opts...)
 
 	var out []DailyAnalytics
 	if err := s.client.Get(ctx, q.Path(basePath+"/analytics/daily"), &out); err != nil {
@@ -292,7 +287,7 @@ func (s *Service) DailyAnalytics(ctx context.Context, opts ...AnalyticsOption) (
 // StepsAnalytics returns the per-step analytics for the campaigns matching the
 // supplied options.
 func (s *Service) StepsAnalytics(ctx context.Context, opts ...AnalyticsOption) ([]StepAnalytics, error) {
-	q := applyAnalytics(opts)
+	q := instantly.ApplyOptions(opts...)
 
 	var out []StepAnalytics
 	if err := s.client.Get(ctx, q.Path(basePath+"/analytics/steps"), &out); err != nil {
@@ -300,16 +295,4 @@ func (s *Service) StepsAnalytics(ctx context.Context, opts ...AnalyticsOption) (
 	}
 
 	return out, nil
-}
-
-// applyAnalytics accumulates the analytics options into a query.
-func applyAnalytics(opts []AnalyticsOption) *instantly.Query {
-	q := instantly.NewQuery()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(q)
-		}
-	}
-
-	return q
 }
