@@ -19,7 +19,9 @@ import (
 	"time"
 
 	"github.com/mrz1836/go-instantly"
+	"github.com/mrz1836/go-instantly/blocklist"
 	"github.com/mrz1836/go-instantly/campaign"
+	"github.com/mrz1836/go-instantly/customtag"
 	"github.com/mrz1836/go-instantly/email"
 	"github.com/mrz1836/go-instantly/emailverification"
 	"github.com/mrz1836/go-instantly/inboxanalytics"
@@ -58,6 +60,8 @@ func main() {
 	webhookEvents := webhookevent.New(client)
 	workspaces := workspace.New(client)
 	members := workspacemember.New(client)
+	blocked := blocklist.New(client)
+	tags := customtag.New(client)
 
 	ctx := context.Background()
 
@@ -106,6 +110,10 @@ func main() {
 	}
 
 	if err := manageWorkspace(ctx, workspaces, members); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := curateBlockList(ctx, blocked, tags); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -345,6 +353,43 @@ func manageWorkspace(
 	}
 
 	log.Printf("invited member %s as %s", sanitize(member.Email), sanitize(string(member.Role)))
+
+	return nil
+}
+
+// curateBlockList bulk-adds block list entries, downloads the list as CSV, and
+// creates a custom tag to organize resources.
+//
+// The download endpoint answers with text/csv rather than JSON, so Download
+// hands back the raw bytes for you to write to a file or parse yourself.
+func curateBlockList(ctx context.Context, blocked *blocklist.Service, tags *customtag.Service) error {
+	created, err := blocked.BulkCreate(ctx, blocklist.BulkCreateRequest{
+		BLValues: []string{"spam.example.com", "noreply@example.com"},
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("blocked %.0f values (%.0f invalid)", created.ValidCount, created.InvalidCount)
+
+	// Download the whole list as CSV — the raw bytes are returned unchanged.
+	csv, err := blocked.Download(ctx, false, "")
+	if err != nil {
+		return err
+	}
+
+	log.Printf("downloaded %d bytes of block list CSV", len(csv))
+
+	// Custom tags organize accounts and campaigns; a nil error is success.
+	tag, err := tags.Create(ctx, customtag.CreateRequest{
+		Label:       "Cold outreach",
+		Description: instantly.Ptr("Accounts reserved for cold campaigns"),
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("created tag %s", sanitize(tag.Label))
 
 	return nil
 }

@@ -200,11 +200,12 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**137 / 171 operations · 19 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+**153 / 171 operations · 22 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
 Campaign, Lead, Lead List, Lead Label, Campaign Subsequence, Email Verification, Inbox Placement Test,
 Inbox Placement Analytics, Inbox Placement Report, SuperSearch Enrichment, Webhook, Webhook Event,
-Workspace, Workspace Member, Workspace Group Member, Workspace Billing); every remaining resource is
-listed below with a link to its reference docs and its operation count, so you can see exactly what is left.
+Workspace, Workspace Member, Workspace Group Member, Workspace Billing, Block List Entry, Custom Tag,
+Custom Tag Mapping); every remaining resource is listed below with a link to its reference docs and its
+operation count, so you can see exactly what is left.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
 	* [x] [`POST /api/v2/emails/test`](email/email.go) - Send a test email (`email.Service.SendTest`)
@@ -362,19 +363,35 @@ listed below with a link to its reference docs and its operation count, so you c
 * [x] **[Workspace Billing API](https://developer.instantly.ai/api-reference/workspacebilling) — ([`workspacebilling/`](workspacebilling/workspacebilling.go))**
 	* [x] `GET /api/v2/workspace-billing/plan-details` - Plan details (`workspacebilling.Service.PlanDetails`)
 	* [x] `GET /api/v2/workspace-billing/subscription-details` - Subscription details (`workspacebilling.Service.SubscriptionDetails`)
+* [x] **[Block List Entry API](https://developer.instantly.ai/api-reference/blocklistentry) — ([`blocklist/`](blocklist/blocklist.go))**
+	* [x] `POST /api/v2/block-lists-entries` - Create entry (`blocklist.Service.Create`)
+	* [x] `GET /api/v2/block-lists-entries` - List entries (`blocklist.Service.List` / `ListIter`)
+	* [x] `DELETE /api/v2/block-lists-entries` - Delete all entries (`blocklist.Service.DeleteAll`)
+	* [x] `GET /api/v2/block-lists-entries/{id}` - Get entry (`blocklist.Service.Get`)
+	* [x] `PATCH /api/v2/block-lists-entries/{id}` - Patch entry (`blocklist.Service.Update`)
+	* [x] `DELETE /api/v2/block-lists-entries/{id}` - Delete entry (`blocklist.Service.Delete`)
+	* [x] `POST /api/v2/block-lists-entries/bulk-create` - Bulk create (`blocklist.Service.BulkCreate`)
+	* [x] `POST /api/v2/block-lists-entries/bulk-delete` - Bulk delete (`blocklist.Service.BulkDelete`)
+	* [x] `GET /api/v2/block-lists-entries/download` - Download CSV, raw bytes (`blocklist.Service.Download`)
+* [x] **[Custom Tag API](https://developer.instantly.ai/api-reference/customtag) — ([`customtag/`](customtag/customtag.go))**
+	* [x] `POST /api/v2/custom-tags` - Create tag (`customtag.Service.Create`)
+	* [x] `GET /api/v2/custom-tags` - List tags (`customtag.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/custom-tags/{id}` - Get tag (`customtag.Service.Get`)
+	* [x] `PATCH /api/v2/custom-tags/{id}` - Patch tag (`customtag.Service.Update`)
+	* [x] `DELETE /api/v2/custom-tags/{id}` - Delete tag (`customtag.Service.Delete`)
+	* [x] `POST /api/v2/custom-tags/toggle-resource` - Assign/unassign tags (`customtag.Service.Toggle`)
+* [x] **[Custom Tag Mapping API](https://developer.instantly.ai/api-reference/customtagmapping) — ([`customtagmapping/`](customtagmapping/customtagmapping.go))**
+	* [x] `GET /api/v2/custom-tag-mappings` - List mappings (`customtagmapping.Service.List` / `ListIter`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
 
-* [ ] **[BlockListEntry](https://developer.instantly.ai/api-reference/blocklistentry)** - 9 operations
 * [ ] **[DFYEmailAccountOrder](https://developer.instantly.ai/api-reference/dfyemailaccountorder)** - 7 operations
-* [ ] **[CustomTag](https://developer.instantly.ai/api-reference/customtag)** - 6 operations
 * [ ] **[APIKey](https://developer.instantly.ai/api-reference/apikey)** - 3 operations
 * [ ] **[OAuth](https://developer.instantly.ai/api-reference/oauth)** - 3 operations
 * [ ] **[BackgroundJob](https://developer.instantly.ai/api-reference/backgroundjob)** - 2 operations
 * [ ] **[CRMActions](https://developer.instantly.ai/api-reference/crmactions)** - 2 operations
 * [ ] **[AuditLog](https://developer.instantly.ai/api-reference/auditlog)** - 1 operation
-* [ ] **[CustomTagMapping](https://developer.instantly.ai/api-reference/customtagmapping)** - 1 operation
 
 > **Notes on the counts.** The **Analytics** area (7 operations) is cross-cutting — 3 endpoints live
 > under **Account** and 4 under **Campaign**, so they are counted within those resources rather than as
