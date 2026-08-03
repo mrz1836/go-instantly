@@ -26,6 +26,7 @@ import (
 	"github.com/mrz1836/go-instantly/campaign"
 	"github.com/mrz1836/go-instantly/crm"
 	"github.com/mrz1836/go-instantly/customtag"
+	"github.com/mrz1836/go-instantly/dfy"
 	"github.com/mrz1836/go-instantly/email"
 	"github.com/mrz1836/go-instantly/emailverification"
 	"github.com/mrz1836/go-instantly/inboxanalytics"
@@ -72,6 +73,7 @@ func main() {
 	jobs := backgroundjob.New(client)
 	phoneNumbers := crm.New(client)
 	oauthSessions := oauth.New(client)
+	dfyOrders := dfy.New(client)
 
 	ctx := context.Background()
 
@@ -146,6 +148,56 @@ func main() {
 	if err := connectMailbox(ctx, oauthSessions); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := orderMailboxes(ctx, dfyOrders); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// orderMailboxes checks a domain's availability, then simulates a Done-For-You
+// order to get a price quote without placing it.
+//
+// Simulation runs the full validation and pricing without charging: inspect
+// OrderIsValid and OrderError on the result. Email providers are typed, and
+// prices the API declares nullable are pointers.
+func orderMailboxes(ctx context.Context, dfyOrders *dfy.Service) error {
+	availability, err := dfyOrders.CheckDomains(ctx, dfy.CheckDomainsRequest{
+		Domains: []string{"example.com"},
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, result := range availability.Results {
+		log.Printf("domain %s available: %t", sanitize(result.Domain), result.Available)
+	}
+
+	// Simulation returns a price quote without placing the order or charging.
+	quote, err := dfyOrders.Create(ctx, dfy.CreateRequest{
+		OrderType:  dfy.OrderTypeDFY,
+		Simulation: instantly.Ptr(true),
+		Items: []dfy.OrderItem{{
+			Domain:        "example.com",
+			EmailProvider: instantly.Ptr(dfy.EmailProviderGoogle),
+			Accounts: []dfy.AccountSpec{{
+				EmailAddressPrefix: "sales",
+				FirstName:          "Sales",
+				LastName:           "Team",
+			}},
+		}},
+	})
+	if err != nil {
+		return err
+	}
+
+	if !quote.OrderIsValid {
+		log.Printf("order would be rejected: %s", sanitize(quote.OrderError))
+		return nil
+	}
+
+	log.Printf("order would cost $%.2f total", quote.TotalPrice)
+
+	return nil
 }
 
 // connectMailbox starts a Google OAuth session and polls its status once.

@@ -200,12 +200,12 @@ your projects without dragging along extra baggage.
 Coverage is built one resource at a time against the
 [Instantly V2 OpenAPI spec](https://api.instantly.ai/openapi/api_v2.json) — **171 operations across 127
 endpoints in 28 resource groups**. Each resource is its own Go package (AWS-SDK-v2 style).
-**153 / 171 operations · 22 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
+**171 / 171 operations · 28 / 28 resources** ship today (Email, Account, Account-Campaign Mappings,
 Campaign, Lead, Lead List, Lead Label, Campaign Subsequence, Email Verification, Inbox Placement Test,
 Inbox Placement Analytics, Inbox Placement Report, SuperSearch Enrichment, Webhook, Webhook Event,
 Workspace, Workspace Member, Workspace Group Member, Workspace Billing, Block List Entry, Custom Tag,
-Custom Tag Mapping); every remaining resource is listed below with a link to its reference docs and its
-operation count, so you can see exactly what is left.
+Custom Tag Mapping, API Key, Audit Log, Background Job, CRM Actions, OAuth, DFY Email Account Order) —
+the SDK now covers the entire Instantly.ai V2 API.
 
 * [x] **[Email API](https://developer.instantly.ai/api-reference/email) — ([`email/`](email/email.go))**
 	* [x] [`POST /api/v2/emails/test`](email/email.go) - Send a test email (`email.Service.SendTest`)
@@ -398,16 +398,16 @@ operation count, so you can see exactly what is left.
 	* [x] `POST /api/v2/oauth/google/init` - Start a Google OAuth session (`oauth.Service.InitGoogle`)
 	* [x] `POST /api/v2/oauth/microsoft/init` - Start a Microsoft OAuth session (`oauth.Service.InitMicrosoft`)
 	* [x] `GET /api/v2/oauth/session/status/{sessionId}` - Poll session status (`oauth.Service.SessionStatus`)
+* [x] **[DFY Email Account Order API](https://developer.instantly.ai/api-reference/dfyemailaccountorder) — ([`dfy/`](dfy/dfy.go))**
+	* [x] `POST /api/v2/dfy-email-account-orders` - Place (or simulate) an order (`dfy.Service.Create`)
+	* [x] `GET /api/v2/dfy-email-account-orders` - List orders (`dfy.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/dfy-email-account-orders/accounts` - List ordered accounts (`dfy.Service.ListAccounts` / `ListAccountsIter`)
+	* [x] `POST /api/v2/dfy-email-account-orders/accounts/cancel` - Cancel accounts (`dfy.Service.CancelAccounts`)
+	* [x] `POST /api/v2/dfy-email-account-orders/domains/similar` - Generate similar domains (`dfy.Service.GenerateSimilarDomains`)
+	* [x] `POST /api/v2/dfy-email-account-orders/domains/check` - Check domain availability (`dfy.Service.CheckDomains`)
+	* [x] `POST /api/v2/dfy-email-account-orders/domains/pre-warmed-up-list` - List pre-warmed-up domains (`dfy.Service.PreWarmedUpDomains`)
 
-**Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
-reference docs:
-
-* [ ] **[DFYEmailAccountOrder](https://developer.instantly.ai/api-reference/dfyemailaccountorder)** - 7 operations
-* [ ] **[APIKey](https://developer.instantly.ai/api-reference/apikey)** - 3 operations
-* [ ] **[OAuth](https://developer.instantly.ai/api-reference/oauth)** - 3 operations
-* [ ] **[BackgroundJob](https://developer.instantly.ai/api-reference/backgroundjob)** - 2 operations
-* [ ] **[CRMActions](https://developer.instantly.ai/api-reference/crmactions)** - 2 operations
-* [ ] **[AuditLog](https://developer.instantly.ai/api-reference/auditlog)** - 1 operation
+Every V2 resource now ships — there is no remaining planned coverage.
 
 > **Notes on the counts.** The **Analytics** area (7 operations) is cross-cutting — 3 endpoints live
 > under **Account** and 4 under **Campaign**, so they are counted within those resources rather than as
