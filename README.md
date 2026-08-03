@@ -388,6 +388,9 @@ operation count, so you can see exactly what is left.
 	* [x] `DELETE /api/v2/api-keys/{id}` - Delete API key (`apikey.Service.Delete`)
 * [x] **[Audit Log API](https://developer.instantly.ai/api-reference/auditlog) — ([`auditlog/`](auditlog/auditlog.go))**
 	* [x] `GET /api/v2/audit-logs` - List audit logs (`auditlog.Service.List` / `ListIter`)
+* [x] **[Background Job API](https://developer.instantly.ai/api-reference/backgroundjob) — ([`backgroundjob/`](backgroundjob/backgroundjob.go))**
+	* [x] `GET /api/v2/background-jobs` - List background jobs (`backgroundjob.Service.List` / `ListIter`)
+	* [x] `GET /api/v2/background-jobs/{id}` - Get a background job (`backgroundjob.Service.Get`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:

@@ -21,6 +21,7 @@ import (
 	"github.com/mrz1836/go-instantly"
 	"github.com/mrz1836/go-instantly/apikey"
 	"github.com/mrz1836/go-instantly/auditlog"
+	"github.com/mrz1836/go-instantly/backgroundjob"
 	"github.com/mrz1836/go-instantly/blocklist"
 	"github.com/mrz1836/go-instantly/campaign"
 	"github.com/mrz1836/go-instantly/customtag"
@@ -66,6 +67,7 @@ func main() {
 	tags := customtag.New(client)
 	keys := apikey.New(client)
 	audit := auditlog.New(client)
+	jobs := backgroundjob.New(client)
 
 	ctx := context.Background()
 
@@ -128,6 +130,45 @@ func main() {
 	if err := reviewAuditLog(ctx, audit); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := trackBackgroundJobs(ctx, jobs); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// trackBackgroundJobs lists the running jobs and reads one, selecting just the
+// data fields it cares about.
+//
+// Job types and statuses are typed; the status filter takes a raw string
+// because a single request can filter on several statuses at once. The data
+// payload is free-form, so WithDataFields narrows it to the fields you need.
+func trackBackgroundJobs(ctx context.Context, jobs *backgroundjob.Service) error {
+	page, err := jobs.List(ctx,
+		backgroundjob.WithType(backgroundjob.TypeMoveLeads),
+		backgroundjob.WithStatus("pending,in-progress"),
+		backgroundjob.WithSortColumn(backgroundjob.SortColumnCreatedAt),
+		backgroundjob.WithSortOrder(instantly.SortOrderDesc),
+	)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("%d lead-move jobs are still running", len(page.Items))
+
+	if len(page.Items) == 0 {
+		return nil
+	}
+
+	job, err := jobs.Get(ctx, page.Items[0].ID,
+		backgroundjob.WithDataFields("success_count,failed_count,total_to_process"),
+	)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("job %s is %.0f%% complete", sanitize(job.ID), job.Progress)
+
+	return nil
 }
 
 // reviewAuditLog lists recent login activity from the workspace audit log.
