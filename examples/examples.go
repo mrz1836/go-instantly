@@ -20,6 +20,7 @@ import (
 
 	"github.com/mrz1836/go-instantly"
 	"github.com/mrz1836/go-instantly/apikey"
+	"github.com/mrz1836/go-instantly/auditlog"
 	"github.com/mrz1836/go-instantly/blocklist"
 	"github.com/mrz1836/go-instantly/campaign"
 	"github.com/mrz1836/go-instantly/customtag"
@@ -64,6 +65,7 @@ func main() {
 	blocked := blocklist.New(client)
 	tags := customtag.New(client)
 	keys := apikey.New(client)
+	audit := auditlog.New(client)
 
 	ctx := context.Background()
 
@@ -122,6 +124,36 @@ func main() {
 	if err := manageAPIKeys(ctx, keys); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := reviewAuditLog(ctx, audit); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// reviewAuditLog lists recent login activity from the workspace audit log.
+//
+// Activity types are typed named constants, and the date filters take a
+// time.Time formatted to the wire for you. Nullable fields such as UserName are
+// pointers, so an absent value stays distinguishable from an empty one.
+func reviewAuditLog(ctx context.Context, audit *auditlog.Service) error {
+	page, err := audit.List(ctx,
+		auditlog.WithActivityType(auditlog.ActivityTypeUserLogin),
+		auditlog.WithStartDate(time.Now().AddDate(0, 0, -7)),
+		auditlog.WithLimit(100),
+	)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("fetched %d login events in the last week", len(page.Items))
+
+	for _, record := range page.Items {
+		if record.UserName != nil {
+			log.Printf("login by %s from %s", sanitize(*record.UserName), sanitize(record.IPAddress))
+		}
+	}
+
+	return nil
 }
 
 // manageAPIKeys creates a scoped API key, lists the workspace keys, and revokes
