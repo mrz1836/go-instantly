@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/mrz1836/go-instantly"
+	"github.com/mrz1836/go-instantly/apikey"
 	"github.com/mrz1836/go-instantly/blocklist"
 	"github.com/mrz1836/go-instantly/campaign"
 	"github.com/mrz1836/go-instantly/customtag"
@@ -62,6 +63,7 @@ func main() {
 	members := workspacemember.New(client)
 	blocked := blocklist.New(client)
 	tags := customtag.New(client)
+	keys := apikey.New(client)
 
 	ctx := context.Background()
 
@@ -116,6 +118,48 @@ func main() {
 	if err := curateBlockList(ctx, blocked, tags); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := manageAPIKeys(ctx, keys); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// manageAPIKeys creates a scoped API key, lists the workspace keys, and revokes
+// one.
+//
+// Scopes are typed named constants (apikey.ScopeCampaignsRead rather than a
+// bare string), so an invalid scope is a compile error. The full secret Key is
+// only returned when the key is first created.
+func manageAPIKeys(ctx context.Context, keys *apikey.Service) error {
+	created, err := keys.Create(ctx, apikey.CreateRequest{
+		Name: "CI deploy key",
+		Scopes: []apikey.Scope{
+			apikey.ScopeCampaignsRead,
+			apikey.ScopeEmailsRead,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// The full token is exposed only here — store it now.
+	log.Printf("created API key %s with %d scopes", sanitize(created.ID), len(created.Scopes))
+
+	page, err := keys.List(ctx, apikey.WithLimit(50))
+	if err != nil {
+		return err
+	}
+
+	log.Printf("workspace has %d API keys", len(page.Items))
+
+	deleted, err := keys.Delete(ctx, created.ID)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("revoked API key %s", sanitize(deleted.ID))
+
+	return nil
 }
 
 // exploreCampaigns lists campaigns and reads one, showing the typed options and

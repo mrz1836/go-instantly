@@ -382,6 +382,10 @@ operation count, so you can see exactly what is left.
 	* [x] `POST /api/v2/custom-tags/toggle-resource` - Assign/unassign tags (`customtag.Service.Toggle`)
 * [x] **[Custom Tag Mapping API](https://developer.instantly.ai/api-reference/customtagmapping) — ([`customtagmapping/`](customtagmapping/customtagmapping.go))**
 	* [x] `GET /api/v2/custom-tag-mappings` - List mappings (`customtagmapping.Service.List` / `ListIter`)
+* [x] **[API Key API](https://developer.instantly.ai/api-reference/apikey) — ([`apikey/`](apikey/apikey.go))**
+	* [x] `POST /api/v2/api-keys` - Create API key (`apikey.Service.Create`)
+	* [x] `GET /api/v2/api-keys` - List API keys (`apikey.Service.List` / `ListIter`)
+	* [x] `DELETE /api/v2/api-keys/{id}` - Delete API key (`apikey.Service.Delete`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:

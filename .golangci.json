@@ -119,6 +119,13 @@
                     ],
                     "path": "examples/.*\\.go$",
                     "text": "G706"
+                },
+                {
+                    "linters": [
+                        "gosec"
+                    ],
+                    "path": "apikey/scopes.go$",
+                    "text": "G101"
                 }
             ]
         },
