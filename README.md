@@ -394,6 +394,10 @@ operation count, so you can see exactly what is left.
 * [x] **[CRM Actions API](https://developer.instantly.ai/api-reference/crmactions) — ([`crm/`](crm/crm.go))**
 	* [x] `GET /api/v2/crm-actions/phone-numbers` - List phone numbers (`crm.Service.ListPhoneNumbers`)
 	* [x] `DELETE /api/v2/crm-actions/phone-numbers/{id}` - Delete a phone number (`crm.Service.DeletePhoneNumber`)
+* [x] **[OAuth API](https://developer.instantly.ai/api-reference/oauth) — ([`oauth/`](oauth/oauth.go))**
+	* [x] `POST /api/v2/oauth/google/init` - Start a Google OAuth session (`oauth.Service.InitGoogle`)
+	* [x] `POST /api/v2/oauth/microsoft/init` - Start a Microsoft OAuth session (`oauth.Service.InitMicrosoft`)
+	* [x] `GET /api/v2/oauth/session/status/{sessionId}` - Poll session status (`oauth.Service.SessionStatus`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:

@@ -30,6 +30,7 @@ import (
 	"github.com/mrz1836/go-instantly/emailverification"
 	"github.com/mrz1836/go-instantly/inboxanalytics"
 	"github.com/mrz1836/go-instantly/inboxtest"
+	"github.com/mrz1836/go-instantly/oauth"
 	"github.com/mrz1836/go-instantly/supersearch"
 	"github.com/mrz1836/go-instantly/webhook"
 	"github.com/mrz1836/go-instantly/webhookevent"
@@ -70,6 +71,7 @@ func main() {
 	audit := auditlog.New(client)
 	jobs := backgroundjob.New(client)
 	phoneNumbers := crm.New(client)
+	oauthSessions := oauth.New(client)
 
 	ctx := context.Background()
 
@@ -140,6 +142,42 @@ func main() {
 	if err := managePhoneNumbers(ctx, phoneNumbers); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := connectMailbox(ctx, oauthSessions); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// connectMailbox starts a Google OAuth session and polls its status once.
+//
+// A session that ends in an error is not decoded into a status: the API
+// delivers the OAuth error code inside an HTTP 200 body, and the client
+// converts that into an *instantly.APIError, so the error code (for example
+// access_denied) is read through errors.As.
+func connectMailbox(ctx context.Context, oauthSessions *oauth.Service) error {
+	session, err := oauthSessions.InitGoogle(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Redirect the user to session.AuthURL, then poll until they finish.
+	log.Printf("send the user to %s", sanitize(session.AuthURL))
+
+	status, err := oauthSessions.SessionStatus(ctx, session.SessionID)
+	if err != nil {
+		// A session that ended in an error surfaces as an APIError carrying the
+		// OAuth error code, delivered at HTTP 200.
+		var apiErr *instantly.APIError
+		if errors.As(err, &apiErr) {
+			log.Printf("oauth session failed: %s", sanitize(apiErr.Code))
+		}
+
+		return err
+	}
+
+	log.Printf("session %s is %s", sanitize(session.SessionID), sanitize(string(status.Status)))
+
+	return nil
 }
 
 // managePhoneNumbers lists the phone numbers the organization owns and releases
