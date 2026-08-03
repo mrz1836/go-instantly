@@ -24,6 +24,7 @@ import (
 	"github.com/mrz1836/go-instantly/backgroundjob"
 	"github.com/mrz1836/go-instantly/blocklist"
 	"github.com/mrz1836/go-instantly/campaign"
+	"github.com/mrz1836/go-instantly/crm"
 	"github.com/mrz1836/go-instantly/customtag"
 	"github.com/mrz1836/go-instantly/email"
 	"github.com/mrz1836/go-instantly/emailverification"
@@ -68,6 +69,7 @@ func main() {
 	keys := apikey.New(client)
 	audit := auditlog.New(client)
 	jobs := backgroundjob.New(client)
+	phoneNumbers := crm.New(client)
 
 	ctx := context.Background()
 
@@ -134,6 +136,38 @@ func main() {
 	if err := trackBackgroundJobs(ctx, jobs); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := managePhoneNumbers(ctx, phoneNumbers); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// managePhoneNumbers lists the phone numbers the organization owns and releases
+// one.
+//
+// The list endpoint answers with a bare array, so the whole set comes back at
+// once. Price is a pointer because it is nullable and omitted from a delete
+// response.
+func managePhoneNumbers(ctx context.Context, phoneNumbers *crm.Service) error {
+	numbers, err := phoneNumbers.ListPhoneNumbers(ctx)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("the organization owns %d phone numbers", len(numbers))
+
+	if len(numbers) == 0 {
+		return nil
+	}
+
+	deleted, err := phoneNumbers.DeletePhoneNumber(ctx, numbers[0].ID)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("released phone number %s", sanitize(deleted.PhoneNumber))
+
+	return nil
 }
 
 // trackBackgroundJobs lists the running jobs and reads one, selecting just the

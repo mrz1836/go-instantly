@@ -391,6 +391,9 @@ operation count, so you can see exactly what is left.
 * [x] **[Background Job API](https://developer.instantly.ai/api-reference/backgroundjob) — ([`backgroundjob/`](backgroundjob/backgroundjob.go))**
 	* [x] `GET /api/v2/background-jobs` - List background jobs (`backgroundjob.Service.List` / `ListIter`)
 	* [x] `GET /api/v2/background-jobs/{id}` - Get a background job (`backgroundjob.Service.Get`)
+* [x] **[CRM Actions API](https://developer.instantly.ai/api-reference/crmactions) — ([`crm/`](crm/crm.go))**
+	* [x] `GET /api/v2/crm-actions/phone-numbers` - List phone numbers (`crm.Service.ListPhoneNumbers`)
+	* [x] `DELETE /api/v2/crm-actions/phone-numbers/{id}` - Delete a phone number (`crm.Service.DeletePhoneNumber`)
 
 **Planned coverage** — every remaining V2 resource, ordered by operation count, each linking to its
 reference docs:
