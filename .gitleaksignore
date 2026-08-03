@@ -1,0 +1,12 @@
+# gitleaks false positives — fingerprints of findings that are not real secrets.
+#
+# Format: {commit}:{file}:{rule}:{startline} (the Fingerprint field gitleaks reports).
+# See https://github.com/gitleaks/gitleaks#gitleaksignore
+
+# apikey test fixture: the "key" value is the fake example from the Instantly V2
+# OpenAPI spec (apikey.APIKey.Key), used only to assert the field decodes. It is
+# not a real credential, but its shape trips the generic-api-key rule. Both the
+# git-mode (commit-prefixed) and dir-mode fingerprints are listed so either scan
+# mode suppresses it.
+4de5c02512cb0033ed3838ace0d2325951f304a9:apikey/apikey_test.go:generic-api-key:28
+apikey/apikey_test.go:generic-api-key:28
