@@ -154,11 +154,18 @@ func (s *CustomTagTestSuite) TestListIterEmptyFirstPage() {
 		_, _ = w.Write([]byte(`{"items":[]}`))
 	})
 
+	var iterErr error
 	yields := 0
-	for range s.svc().ListIter(context.Background()) {
+
+	for _, err := range s.svc().ListIter(context.Background()) {
 		yields++
+
+		if err != nil {
+			iterErr = err
+		}
 	}
 
+	s.Require().NoError(iterErr)
 	s.Zero(yields, "an empty result set yields nothing at all")
 	s.Equal(int64(1), requests.Load())
 }
